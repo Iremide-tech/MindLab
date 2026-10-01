@@ -46,14 +46,14 @@ export default function MindMap({
   variant="dots"
   gap={24}
   size={1}
-  color="#6b21a8"
+  color="#526448"
 />
        <Controls
-  className="!border-white/10 !bg-zinc-950/80 !shadow-xl"
+  className="border-white/10! bg-lab-surface/80! shadow-xl!"
 />
 
         <MiniMap
-          nodeColor="#a855f7"
+          nodeColor="#c8f169"
           maskColor="rgba(0, 0, 0, 0.75)"
         />
       </ReactFlow>

@@ -18,12 +18,29 @@ import KnowledgePanel from "@/components/KnowledgePanel";
 import type { MindMapNode } from "@/lib/mindmap";
 import { createClient } from "@/lib/supabase/client";
 
+type WorkspaceInvitation = {
+  id: string;
+  email: string;
+  role: "collaborator";
+  status: "pending";
+  expires_at: string;
+  created_at: string;
+};
+
+type WorkspaceMember = {
+  user_id: string;
+  email: string | null;
+  role: "owner" | "collaborator";
+  created_at: string;
+};
+
 const supabase = createClient();
 
 export default function Home() {
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Keeps track of how many research topics have been added.
   // Each topic gets its own area on the canvas.
@@ -61,6 +78,17 @@ const [mapTitle, setMapTitle] = useState("Untitled research map");
 const [savedMaps, setSavedMaps] = useState<any[]>([]);
 const [loadingMaps, setLoadingMaps] = useState(false);
 const [showSavedMaps, setShowSavedMaps] = useState(false);
+const [currentMapId, setCurrentMapId] = useState<string | null>(null);
+const [currentMapOwnerId, setCurrentMapOwnerId] = useState<string | null>(null);
+
+const [showShare, setShowShare] = useState(false);
+const [inviteEmail, setInviteEmail] = useState("");
+const [inviting, setInviting] = useState(false);
+const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+const [invitationUrl, setInvitationUrl] = useState<string | null>(null);
+const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
+const [members, setMembers] = useState<WorkspaceMember[]>([]);
+const [loadingCollaborators, setLoadingCollaborators] = useState(false);
 
    
 useEffect(() => {
@@ -74,7 +102,27 @@ useEffect(() => {
       return;
     }
 
+    setCurrentUserId(user.id);
     setUserEmail(user.email ?? null);
+
+    const requestedMapId = new URLSearchParams(window.location.search).get("map");
+    if (requestedMapId) {
+      const { data: requestedMap, error } = await supabase
+        .from("research_maps")
+        .select("id, user_id, title, nodes, edges")
+        .eq("id", requestedMapId)
+        .maybeSingle();
+
+      if (requestedMap && !error) {
+        setNodes(requestedMap.nodes ?? []);
+        setEdges(requestedMap.edges ?? []);
+        setMapTitle(requestedMap.title ?? "Untitled research map");
+        setCurrentMapId(requestedMap.id);
+        setCurrentMapOwnerId(requestedMap.user_id);
+      } else {
+        setSaveMessage("You do not have access to that workspace.");
+      }
+    }
   };
 
   loadUser();
@@ -87,6 +135,7 @@ useEffect(() => {
       return;
     }
 
+    setCurrentUserId(session.user.id);
     setUserEmail(session.user.email ?? null);
   });
 
@@ -578,17 +627,17 @@ const startAngle =
             animated: true,
 
             style: {
-              stroke: "#a855f7",
+              stroke: "#c8f169",
               strokeWidth: 2,
             },
 
             labelStyle: {
-              fill: "#c084fc",
+              fill: "#d9f4a6",
               fontSize: 12,
             },
 
             labelBgStyle: {
-              fill: "#09090b",
+              fill: "#101511",
               fillOpacity: 0.9,
             },
           })
@@ -670,33 +719,44 @@ async function saveCurrentMap() {
     return;
   }
 
-  const { error } = await supabase
+  const { data, error: saveError } = await supabase
     .from("research_maps")
     .insert({
       user_id: user.id,
-      title: mapTitle,
+      title: mapTitle || "Untitled research map",
       nodes,
       edges,
-    });
+    })
+    .select("id")
+    .single();
 
-  if (error) {
-    console.error("Save failed:", error.message);
+  if (saveError) {
+    console.error("Failed to save research map:", saveError);
     setSaveMessage("Could not save your map.");
   } else {
+    setCurrentMapId(data.id);
+    setCurrentMapOwnerId(user.id);
     setSaveMessage("Map saved successfully.");
   }
 
   setSaving(false);
 }
 
+
+ 
+
+
 function openSavedMap(map: any) {
   setNodes(map.nodes ?? []);
   setEdges(map.edges ?? []);
   setMapTitle(map.title ?? "Untitled research map");
+
+  setCurrentMapId(map.id);
+  setCurrentMapOwnerId(map.user_id);
+
   setShowSavedMaps(false);
   setSelectedNode(null);
 }
-
 async function loadSavedMaps() {
   setLoadingMaps(true);
 
@@ -712,7 +772,6 @@ async function loadSavedMaps() {
   const { data, error } = await supabase
     .from("research_maps")
     .select("*")
-    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -724,19 +783,113 @@ async function loadSavedMaps() {
   setLoadingMaps(false);
 }
 
-  return (
-    <main className="relative h-screen w-screen overflow-hidden bg-black text-white">
+async function loadCollaborators() {
+  if (!currentMapId) return;
+
+  setLoadingCollaborators(true);
+  try {
+    const response = await fetch(
+      `/api/invitations?mapId=${encodeURIComponent(currentMapId)}`
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to load collaborators.");
+    setInvitations(data.invitations ?? []);
+    setMembers(data.members ?? []);
+  } catch (error) {
+    setInviteMessage(error instanceof Error ? error.message : "Failed to load collaborators.");
+  } finally {
+    setLoadingCollaborators(false);
+  }
+}
+
+async function sendInvitation() {
+  if (!currentMapId) {
+    setInviteMessage("Save this map before inviting someone.");
+    return;
+  }
+
+  if (!inviteEmail.trim()) {
+    setInviteMessage("Enter an email address.");
+    return;
+  }
+
+  setInviting(true);
+  setInviteMessage(null);
+  setInvitationUrl(null);
+
+  try {
+    const response = await fetch("/api/invitations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        mapId: currentMapId,
+        email: inviteEmail.trim(),
+        role: "collaborator",
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setInviteMessage(data.error || "Failed to send invitation.");
+      return;
+    }
+
+    setInviteMessage(`Invitation sent to ${inviteEmail.trim()}.`);
+    setInvitationUrl(data.invitationUrl);
+    setInviteEmail("");
+    await loadCollaborators();
+  } catch (error) {
+    console.error("Invitation error:", error);
+    setInviteMessage("Something went wrong creating the invitation.");
+  } finally {
+    setInviting(false);
+  }
+}
+
+async function revokeInvitation(invitationId: string) {
+  setInviteMessage(null);
+  try {
+    const response = await fetch("/api/invitations", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invitationId }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to revoke invitation.");
+    setInvitationUrl(null);
+    setInviteMessage("Invitation revoked.");
+    await loadCollaborators();
+  } catch (error) {
+    setInviteMessage(error instanceof Error ? error.message : "Failed to revoke invitation.");
+  }
+}
+
+async function copyInvitationLink() {
+  if (!invitationUrl) return;
+  try {
+    await navigator.clipboard.writeText(invitationUrl);
+    setInviteMessage("Invitation link copied.");
+  } catch {
+    setInviteMessage("Copy failed. Select and copy the invitation link.");
+  }
+}
+
+return (
+  <main className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
 
       {/* HEADER */}
 
-      <header className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between border-b border-white/10 bg-black/70 px-6 py-4 backdrop-blur-xl">
+      <header className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between border-b border-white/10 bg-background/70 px-6 py-4 backdrop-blur-xl">
 
         {/* Logo */}
 
         <div>
           <h1 className="text-xl font-bold tracking-tight">
             MindLab
-            <span className="text-purple-400">
+            <span className="text-lab-lime">
               AI
             </span>
           </h1>
@@ -768,13 +921,13 @@ async function loadSavedMaps() {
                 setTopic(e.target.value)
               }
               placeholder="Add a research topic..."
-              className="w-80 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-purple-400/50 focus:bg-white/10"
+              className="w-80 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-lab-lime/50 focus:bg-white/10"
             />
 
             <button
               type="submit"
               disabled={loading}
-              className="rounded-xl bg-purple-500 px-5 py-2 text-sm font-medium transition hover:bg-purple-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-lab-lime px-5 py-2 text-sm font-medium text-lab-ink transition hover:bg-lab-lime-light disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading
                 ? "Thinking..."
@@ -789,7 +942,7 @@ async function loadSavedMaps() {
             onClick={toggleConnectMode}
             className={`rounded-xl border px-5 py-2 text-sm font-medium transition ${
               connectMode
-                ? "border-purple-400 bg-purple-500/20 text-purple-300"
+                ? "border-lab-lime bg-lab-lime/20 text-lab-lime-light"
                 : "border-white/10 bg-white/5 hover:bg-white/10"
             }`}
           >
@@ -813,10 +966,25 @@ async function loadSavedMaps() {
   type="button"
   onClick={saveCurrentMap}
   disabled={saving || nodes.length === 0}
-  className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-5 py-2 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+  className="rounded-xl border border-lab-copper/20 bg-lab-copper/10 px-5 py-2 text-sm font-medium text-lab-copper transition hover:bg-lab-copper/20 disabled:cursor-not-allowed disabled:opacity-40"
 >
   {saving ? "Saving..." : "Save Map"}
 </button>
+
+{currentMapId && currentMapOwnerId === currentUserId && (
+  <button
+    type="button"
+    onClick={() => {
+      setInviteMessage(null);
+      setInvitationUrl(null);
+      setShowShare(true);
+      void loadCollaborators();
+    }}
+    className="rounded-xl border border-lab-lime/20 bg-lab-lime/10 px-5 py-2 text-sm font-medium text-lab-lime-light transition hover:bg-lab-lime/20"
+  >
+    Invite
+  </button>
+)}
 
         </div>
         
@@ -837,14 +1005,14 @@ async function loadSavedMaps() {
       {/* CONNECTION MODE */}
 
       {connectMode && (
-        <div className="absolute left-1/2 top-24 z-40 -translate-x-1/2 rounded-2xl border border-purple-400/20 bg-zinc-950/90 px-6 py-4 text-center shadow-2xl backdrop-blur-xl">
+        <div className="absolute left-1/2 top-24 z-40 -translate-x-1/2 rounded-2xl border border-lab-lime/20 bg-lab-surface/90 px-6 py-4 text-center shadow-2xl backdrop-blur-xl">
 
           <p className="text-sm text-white/70">
             Select two concepts
             to connect
           </p>
 
-          <p className="mt-1 text-xs text-purple-400">
+          <p className="mt-1 text-xs text-lab-lime">
             {selectedForConnection.length}
             /2 selected
           </p>
@@ -854,7 +1022,7 @@ async function loadSavedMaps() {
             <button
               onClick={connectTopics}
               disabled={connecting}
-              className="mt-3 w-full rounded-xl bg-purple-500 px-4 py-2 text-sm font-medium transition hover:bg-purple-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 w-full rounded-xl bg-lab-lime px-4 py-2 text-sm font-medium text-lab-ink transition hover:bg-lab-lime-light disabled:cursor-not-allowed disabled:opacity-50"
             >
               {connecting
                 ? "Analyzing..."
@@ -868,15 +1036,15 @@ async function loadSavedMaps() {
     
 
       {connectionExplanation && (
-        <div className="absolute bottom-6 left-1/2 z-40 w-[420px] -translate-x-1/2 rounded-2xl border border-purple-400/20 bg-zinc-950/95 p-5 shadow-2xl backdrop-blur-xl">
+        <div className="absolute bottom-6 left-1/2 z-40 w-[420px] -translate-x-1/2 rounded-2xl border border-lab-lime/20 bg-lab-surface/95 p-5 shadow-2xl backdrop-blur-xl">
 
           <div className="mb-2 flex items-center gap-2">
 
-            <span className="text-purple-400">
+            <span className="text-lab-lime">
               ✦
             </span>
 
-            <span className="text-xs font-medium uppercase tracking-widest text-purple-400">
+            <span className="text-xs font-medium uppercase tracking-widest text-lab-lime">
               Connection Explanation
             </span>
 
@@ -900,7 +1068,7 @@ async function loadSavedMaps() {
 
       
 {showSavedMaps && (
-  <div className="absolute right-6 top-24 z-50 w-80 rounded-2xl border border-white/10 bg-zinc-950/95 p-5 shadow-2xl backdrop-blur-xl">
+  <div className="absolute right-6 top-24 z-50 w-80 rounded-2xl border border-white/10 bg-lab-surface/95 p-5 shadow-2xl backdrop-blur-xl">
     <div className="mb-4 flex items-center justify-between">
       <h2 className="font-semibold">Saved Maps</h2>
 
@@ -928,7 +1096,7 @@ async function loadSavedMaps() {
             key={map.id}
             type="button"
             onClick={() => openSavedMap(map)}
-            className="block w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-purple-500/10"
+            className="block w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-lab-lime/10"
           >
             <p className="text-sm font-medium text-white">
               {map.title}
@@ -941,6 +1109,131 @@ async function loadSavedMaps() {
         ))}
       </div>
     )}
+  </div>
+)}
+
+{showShare && currentMapId && currentMapOwnerId === currentUserId && (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="collaborators-title"
+      className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface p-5 text-white shadow-2xl sm:p-6"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 id="collaborators-title" className="text-lg font-semibold">Invite collaborators</h2>
+          <p className="mt-1 text-sm text-white/50">Invite someone to this saved workspace.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowShare(false)}
+          aria-label="Close invite dialog"
+          className="rounded-lg px-2 py-1 text-white/45 transition hover:bg-white/10 hover:text-white"
+        >
+          ✕
+        </button>
+      </div>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void sendInvitation();
+        }}
+        className="mt-5 flex flex-col gap-2 sm:flex-row"
+      >
+        <input
+          type="email"
+          value={inviteEmail}
+          onChange={(event) => setInviteEmail(event.target.value)}
+          disabled={inviting}
+          maxLength={254}
+          required
+          placeholder="Email address"
+          aria-label="Collaborator email address"
+          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/35 focus:border-lab-lime/60"
+        />
+        <button
+          type="submit"
+          disabled={inviting}
+          className="rounded-xl bg-lab-lime px-5 py-3 text-sm font-medium text-lab-ink transition hover:bg-lab-lime-light disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {inviting ? "Sending..." : "Send invitation"}
+        </button>
+      </form>
+
+      {inviteMessage && (
+        <p role="status" className="mt-3 text-sm text-white/70">
+          {inviteMessage}
+        </p>
+      )}
+
+      {invitationUrl && (
+        <div className="mt-3 flex gap-2">
+          <input
+            readOnly
+            value={invitationUrl}
+            aria-label="Invitation link"
+            onFocus={(event) => event.currentTarget.select()}
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs text-white/70 outline-none"
+          />
+          <button
+            type="button"
+            onClick={copyInvitationLink}
+            className="rounded-lg border border-white/10 px-3 py-2 text-xs font-medium transition hover:bg-white/10"
+          >
+            Copy link
+          </button>
+        </div>
+      )}
+
+      <div className="mt-7 border-t border-white/10 pt-5">
+        <h3 className="text-sm font-semibold">Members</h3>
+        {loadingCollaborators ? (
+          <p className="mt-3 text-sm text-white/45">Loading members...</p>
+        ) : members.length === 0 ? (
+          <p className="mt-3 text-sm text-white/45">No members found.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-white/[0.07]">
+            {members.map((member) => (
+              <li key={member.user_id} className="flex items-center justify-between gap-3 py-2.5">
+                <span className="truncate text-sm text-white/75">{member.email || "Workspace member"}</span>
+                <span className="shrink-0 rounded-md bg-white/5 px-2 py-1 text-[11px] capitalize text-white/50">
+                  {member.role}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="mt-6 border-t border-white/10 pt-5">
+        <h3 className="text-sm font-semibold">Pending invitations</h3>
+        {!loadingCollaborators && invitations.length === 0 ? (
+          <p className="mt-3 text-sm text-white/45">No pending invitations.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-white/[0.07]">
+            {invitations.map((invitation) => (
+              <li key={invitation.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white/75">{invitation.email}</p>
+                  <p className="mt-1 text-xs text-white/40">
+                    Expires {new Date(invitation.expires_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => revokeInvitation(invitation.id)}
+                  className="shrink-0 rounded-lg border border-lab-copper/20 px-3 py-1.5 text-xs text-lab-copper transition hover:bg-lab-copper/10"
+                >
+                  Revoke
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   </div>
 )}
 

@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MindMap AI",
-  description: "A mind mapping tool powered by AI. Explore the relationships between research topics and visualize them in an interactive mind map.",
+  title: "MindLab AI | Think. Connect. Learn.",
+  description:
+    "An AI-powered workspace for learning and research. Organize ideas, connect topics, and build knowledge that stays with you.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -16,6 +16,17 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Invitation Email
+
+Invitation emails are sent server-side through Resend. Set these values in `.env.local` for local development and in your deployment's server environment:
+
+```env
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=MindLab <invites@your-verified-domain.com>
+```
+
+Verify the sender domain in Resend before sending from it. Keep `RESEND_API_KEY` server-only; do not prefix it with `NEXT_PUBLIC_` or commit it. The invitation email links to the existing `/invite/[token]` acceptance page.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

@@ -4,8 +4,11 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { getSafePostAuthPath } from "@/lib/invitations/redirect";
 
 export default function SignupPage() {
+  const router = useRouter();
   const supabase = createClient();
 
   const [email, setEmail] = useState("");
@@ -23,11 +26,17 @@ export default function SignupPage() {
     setError(null);
     setMessage(null);
 
+    const returnPath = getSafePostAuthPath(
+      new URLSearchParams(window.location.search).get("redirect")
+    );
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
+    callbackUrl.searchParams.set("redirect", returnPath);
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: callbackUrl.toString(),
       },
     });
 
@@ -46,10 +55,16 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
 
+    const returnPath = getSafePostAuthPath(
+      new URLSearchParams(window.location.search).get("redirect")
+    );
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
+    callbackUrl.searchParams.set("redirect", returnPath);
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl.toString(),
       },
     });
 
@@ -60,11 +75,11 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/90 p-8 shadow-2xl">
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface/90 p-8 shadow-2xl">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold">
-            MindMap<span className="text-purple-400">AI</span>
+            MindMap<span className="text-lab-lime">AI</span>
           </h1>
 
           <p className="mt-2 text-sm text-white/50">
@@ -79,7 +94,7 @@ export default function SignupPage() {
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-purple-400"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-lab-lime"
           />
 
           <input
@@ -89,13 +104,13 @@ export default function SignupPage() {
             minLength={6}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-purple-400"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-lab-lime"
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-purple-500 py-3 font-medium transition hover:bg-purple-400 disabled:opacity-50"
+            className="w-full rounded-xl bg-lab-lime py-3 font-medium text-lab-ink transition hover:bg-lab-lime-light disabled:opacity-50"
           >
             {loading ? "Creating account..." : "Create account"}
           </button>
@@ -131,7 +146,16 @@ export default function SignupPage() {
           Already have an account?{" "}
           <Link
             href="/login"
-            className="text-purple-400 hover:text-purple-300"
+            onClick={(event) => {
+              const returnPath = getSafePostAuthPath(
+                new URLSearchParams(window.location.search).get("redirect")
+              );
+              if (returnPath !== "/dashboard") {
+                event.preventDefault();
+                router.push(`/login?redirect=${encodeURIComponent(returnPath)}`);
+              }
+            }}
+            className="text-lab-lime hover:text-lab-lime-light"
           >
             Log in
           </Link>

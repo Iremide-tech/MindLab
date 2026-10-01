@@ -1,22 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #080b09;
+  --foreground: #f3f5ef;
+  --lab-lime: #c8f169;
+  --lab-lime-light: #d8ff87;
+  --lab-lime-soft: #d9f4a6;
+  --lab-ink: #15200c;
+  --lab-surface: #101511;
+  --lab-canvas: #0b100d;
+  --lab-card: #151b16;
+  --lab-root: #1b2518;
+  --lab-copper: #e2a16b;
+  --lab-copper-soft: #f2c59f;
+  --lab-copper-surface: #211a14;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-lab-lime: var(--lab-lime);
+  --color-lab-lime-light: var(--lab-lime-light);
+  --color-lab-lime-soft: var(--lab-lime-soft);
+  --color-lab-ink: var(--lab-ink);
+  --color-lab-surface: var(--lab-surface);
+  --color-lab-canvas: var(--lab-canvas);
+  --color-lab-card: var(--lab-card);
+  --color-lab-root: var(--lab-root);
+  --color-lab-copper: var(--lab-copper);
+  --color-lab-copper-soft: var(--lab-copper-soft);
+  --color-lab-copper-surface: var(--lab-copper-surface);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

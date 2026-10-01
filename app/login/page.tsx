@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getSafePostAuthPath } from "@/lib/invitations/redirect";
 
 const supabase = createClient();
 
@@ -38,7 +39,10 @@ export default function LoginPage() {
 
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    router.replace("/dashboard");
+    const returnPath = getSafePostAuthPath(
+      new URLSearchParams(window.location.search).get("redirect")
+    );
+    router.replace(returnPath);
     router.refresh();
   }
 
@@ -47,10 +51,16 @@ export default function LoginPage() {
     setError(null);
     setMessage(null);
 
+    const returnPath = getSafePostAuthPath(
+      new URLSearchParams(window.location.search).get("redirect")
+    );
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
+    callbackUrl.searchParams.set("redirect", returnPath);
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl.toString(),
       },
     });
 
@@ -61,8 +71,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/90 p-8 shadow-2xl">
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface/90 p-8 shadow-2xl">
         <div className="mb-8 text-center">
           <Link href="/" className="inline-block">
             <h1 className="text-3xl font-bold">MindLab</h1>
@@ -80,7 +90,7 @@ export default function LoginPage() {
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition focus:border-purple-400"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition focus:border-lab-lime"
           />
 
           <input
@@ -90,13 +100,13 @@ export default function LoginPage() {
             minLength={6}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition focus:border-purple-400"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition focus:border-lab-lime"
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-purple-500 py-3 font-medium transition hover:bg-purple-400 disabled:opacity-50"
+            className="w-full rounded-xl bg-lab-lime py-3 font-medium text-lab-ink transition hover:bg-lab-lime-light disabled:opacity-50"
           >
             {loading ? "Entering..." : "Login"}
           </button>
@@ -132,7 +142,16 @@ export default function LoginPage() {
           First time?{" "}
           <Link
             href="/signup"
-            className="text-purple-400 hover:text-purple-300"
+            onClick={(event) => {
+              const returnPath = getSafePostAuthPath(
+                new URLSearchParams(window.location.search).get("redirect")
+              );
+              if (returnPath !== "/dashboard") {
+                event.preventDefault();
+                router.push(`/signup?redirect=${encodeURIComponent(returnPath)}`);
+              }
+            }}
+            className="text-lab-lime hover:text-lab-lime-light"
           >
             Sign up
           </Link>

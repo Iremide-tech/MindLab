@@ -63,14 +63,14 @@ export default function KnowledgePanel({
   }
 
   return (
-    <aside className="absolute right-5 top-24 z-30 w-80 rounded-2xl border border-white/10 bg-zinc-950/95 p-5 text-white shadow-2xl backdrop-blur-xl">
+    <aside className="absolute right-5 top-24 z-30 w-80 rounded-2xl border border-white/10 bg-lab-surface/95 p-5 text-white shadow-2xl backdrop-blur-xl">
 
       {/* Header */}
 
       <div className="mb-5 flex items-start justify-between gap-4">
 
         <div>
-          <p className="mb-1 text-xs uppercase tracking-widest text-purple-400">
+          <p className="mb-1 text-xs uppercase tracking-widest text-lab-lime">
             Concept
           </p>
 
@@ -102,15 +102,15 @@ export default function KnowledgePanel({
       {/* AI Explanation */}
 
       {explanation && (
-        <div className="mb-5 rounded-xl border border-purple-400/20 bg-purple-500/10 p-4">
+        <div className="mb-5 rounded-xl border border-lab-lime/20 bg-lab-lime/10 p-4">
 
           <div className="mb-2 flex items-center gap-2">
 
-            <span className="text-purple-400">
+            <span className="text-lab-lime">
               ✦
             </span>
 
-            <span className="text-xs font-medium uppercase tracking-widest text-purple-400">
+            <span className="text-xs font-medium uppercase tracking-widest text-lab-lime">
               Simpler explanation
             </span>
 
@@ -132,7 +132,7 @@ export default function KnowledgePanel({
         <button
           onClick={explainSimpler}
           disabled={loading}
-          className="rounded-xl border border-purple-400/20 bg-purple-500/10 px-3 py-2 text-sm transition hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl border border-lab-lime/20 bg-lab-lime/10 px-3 py-2 text-sm transition hover:bg-lab-lime/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading
             ? "Thinking..."
@@ -152,7 +152,7 @@ export default function KnowledgePanel({
         <button
           onClick={onExpand}
           disabled={expanding}
-          className="col-span-2 rounded-xl border border-purple-400/20 bg-purple-500/10 px-3 py-2 text-sm font-medium transition hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="col-span-2 rounded-xl border border-lab-lime/20 bg-lab-lime/10 px-3 py-2 text-sm font-medium transition hover:bg-lab-lime/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {expanding
             ? "Exploring..."
@@ -162,7 +162,7 @@ export default function KnowledgePanel({
         {/* Quiz Me */}
 
         <button
-          className="col-span-2 rounded-xl bg-purple-500 px-3 py-2 text-sm font-medium transition hover:bg-purple-400"
+          className="col-span-2 rounded-xl bg-lab-lime px-3 py-2 text-sm font-medium text-lab-ink transition hover:bg-lab-lime-light"
         >
           Quiz me
         </button>
