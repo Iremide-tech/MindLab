@@ -41,7 +41,7 @@ export default function SignupPage() {
     });
 
     if (error) {
-      setError(error.message);
+      setError("Unable to create your account. Check your details and try again.");
     } else {
       setMessage(
         "Account created! Check your email to confirm your account."
@@ -69,7 +69,7 @@ export default function SignupPage() {
     });
 
     if (error) {
-      setError(error.message);
+      setError("Unable to sign up with that provider. Please try again.");
       setLoading(false);
     }
   }

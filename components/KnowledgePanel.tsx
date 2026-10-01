@@ -23,6 +23,7 @@ export default function KnowledgePanel({
     useState<string | null>(null);
 
   if (!node) return null;
+  const selectedNode = node;
 
   async function explainSimpler() {
     setLoading(true);
@@ -37,8 +38,8 @@ export default function KnowledgePanel({
         },
 
         body: JSON.stringify({
-          label: node.label,
-          description: node.description,
+          label: selectedNode.label,
+          description: selectedNode.description,
         }),
       });
 

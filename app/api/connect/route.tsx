@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
+import { isRecord, parseAiRequest } from "@/lib/ai/request";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -35,11 +36,24 @@ const connectionSchema = {
 
 export async function POST(request: Request) {
   try {
-    const { topicA, topicB } = await request.json();
+    const parsed = await parseAiRequest(request);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    if (!isRecord(parsed.data)) {
+      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+    }
+    const { topicA, topicB } = parsed.data;
 
-    if (!topicA || !topicB) {
+    const isTopic = (value: unknown) => {
+      if (!isRecord(value)) return false;
+      return typeof value.id === "string" && value.id.length > 0 && value.id.length <= 128
+        && typeof value.label === "string" && value.label.trim().length > 0 && value.label.length <= 300
+        && (value.description === undefined || (typeof value.description === "string" && value.description.length <= 4000));
+    };
+    if (!isTopic(topicA) || !isTopic(topicB)) {
       return NextResponse.json(
-        { error: "Two topics are required" },
+        { error: "Two valid topics are required." },
         { status: 400 }
       );
     }
@@ -76,6 +90,7 @@ Rules:
       },
     });
 
+    if (!response.output_text) throw new Error("AI returned an empty response.");
     const result = JSON.parse(response.output_text);
 
     return NextResponse.json(result);
@@ -83,13 +98,8 @@ Rules:
     console.error("Connection error:", error);
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to connect topics",
-      },
-      { status: 500 }
+      { error: "AI connection analysis is temporarily unavailable. Please try again." },
+      { status: 502 }
     );
   }
 }

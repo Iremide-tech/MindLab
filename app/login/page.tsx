@@ -30,7 +30,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setError(error.message);
+      setError("Unable to sign in with those credentials. Check your email and password, then try again.");
       setLoading(false);
       return;
     }
@@ -65,7 +65,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setError(error.message);
+      setError("Unable to sign in with that provider. Please try again.");
       setLoading(false);
     }
   }

@@ -1,6 +1,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
+import { isRecord, parseAiRequest } from "@/lib/ai/request";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -43,13 +44,23 @@ const mindMapSchema = {
 
 export async function POST(request: Request) {
   try {
-    const { topic } = await request.json();
+    const parsed = await parseAiRequest(request);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    if (!isRecord(parsed.data)) {
+      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+    }
+    const topic = parsed.data.topic;
 
-    if (!topic?.trim()) {
+    if (typeof topic !== "string" || !topic.trim()) {
       return NextResponse.json(
         { error: "Topic is required" },
         { status: 400 }
       );
+    }
+    if (topic.trim().length > 1000) {
+      return NextResponse.json({ error: "Topic must be 1000 characters or fewer." }, { status: 400 });
     }
 
     const prompt = `
@@ -79,6 +90,7 @@ Rules:
       },
     });
 
+    if (!response.output_text) throw new Error("AI returned an empty response.");
     const mindMap = JSON.parse(response.output_text);
 
     return NextResponse.json(mindMap);
@@ -86,13 +98,8 @@ Rules:
     console.error("Mind map error:", error);
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to generate mind map",
-      },
-      { status: 500 }
+      { error: "AI generation is temporarily unavailable. Please try again." },
+      { status: 502 }
     );
   }
 }

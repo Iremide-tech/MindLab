@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
+import { isRecord, parseAiRequest } from "@/lib/ai/request";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -7,13 +8,23 @@ const ai = new GoogleGenAI({
 
 export async function POST(request: Request) {
   try {
-    const { label, description } = await request.json();
+    const parsed = await parseAiRequest(request);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    if (!isRecord(parsed.data)) {
+      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+    }
+    const { label, description } = parsed.data;
 
-    if (!label) {
+    if (typeof label !== "string" || !label.trim()) {
       return NextResponse.json(
         { error: "Concept is required" },
         { status: 400 }
       );
+    }
+    if (label.trim().length > 300 || (description !== undefined && (typeof description !== "string" || description.length > 4000))) {
+      return NextResponse.json({ error: "Concept details are too long." }, { status: 400 });
     }
 
     const prompt = `
@@ -48,13 +59,8 @@ Rules:
     console.error("Explain error:", error);
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to explain concept",
-      },
-      { status: 500 }
+      { error: "AI explanation is temporarily unavailable. Please try again." },
+      { status: 502 }
     );
   }
 }

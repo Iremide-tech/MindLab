@@ -3,6 +3,7 @@
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   type Node,
@@ -43,7 +44,7 @@ export default function MindMap({
   onNodeClick={onNodeClick}
 >
        <Background
-  variant="dots"
+  variant={BackgroundVariant.Dots}
   gap={24}
   size={1}
   color="#526448"
