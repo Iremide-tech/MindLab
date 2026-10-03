@@ -1,6 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
+
 import { isRecord, parseAiRequest } from "@/lib/ai/request";
+import { createClient } from "@/lib/supabase/server";
+import { enforceFeatureLimit, getPlanConfig, recordFeatureUsage } from "@/lib/paywall";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -8,6 +11,34 @@ const ai = new GoogleGenAI({
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "You must be logged in to continue." },
+        { status: 401 }
+      );
+    }
+
+    const access = await enforceFeatureLimit({
+      supabase,
+      userId: user.id,
+      feature: "explain",
+      request,
+    });
+
+    if (!access.allowed) {
+      return NextResponse.json(
+        {
+          error: access.message ?? `You have reached the ${getPlanConfig(access.planCode).name.toLowerCase()} plan limit for today. Upgrade to continue.`,
+        },
+        { status: 403 }
+      );
+    }
+
     const parsed = await parseAiRequest(request);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error }, { status: parsed.status });
@@ -50,6 +81,12 @@ Rules:
     const response = await ai.interactions.create({
       model: "gemini-3.8-flash",
       input: prompt,
+    });
+
+    await recordFeatureUsage({
+      supabase,
+      userId: user.id,
+      feature: "explain",
     });
 
     return NextResponse.json({
