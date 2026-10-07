@@ -1,31 +1,50 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getSafePostAuthPath } from "@/lib/invitations/redirect";
 
 const supabase = createClient();
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-background" />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [callbackErrorDismissed, setCallbackErrorDismissed] = useState(false);
+  const callbackError = searchParams.get("error");
+  const callbackErrorMessage =
+    callbackError === "gmail_account_exists"
+      ? "A MindLab account already exists for this Gmail address. Sign in using that account instead."
+      : callbackError === "google_signin_failed"
+        ? "Google sign-in could not be completed. Try again or sign in with your email and password."
+        : null;
+  const visibleError = error ?? (callbackErrorDismissed ? null : callbackErrorMessage);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    setCallbackErrorDismissed(true);
     setLoading(true);
     setError(null);
     setMessage(null);
 
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim().toLowerCase(),
       password,
     });
 
@@ -44,30 +63,6 @@ export default function LoginPage() {
     );
     router.replace(returnPath);
     router.refresh();
-  }
-
-  async function handleGoogleLogin() {
-    setLoading(true);
-    setError(null);
-    setMessage(null);
-
-    const returnPath = getSafePostAuthPath(
-      new URLSearchParams(window.location.search).get("redirect")
-    );
-    const callbackUrl = new URL("/auth/callback", window.location.origin);
-    callbackUrl.searchParams.set("redirect", returnPath);
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: callbackUrl.toString(),
-      },
-    });
-
-    if (error) {
-      setError("Unable to sign in with that provider. Please try again.");
-      setLoading(false);
-    }
   }
 
   return (
@@ -112,23 +107,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="my-5 flex items-center gap-3">
-          <div className="h-px flex-1 bg-white/10" />
-          <span className="text-xs text-white/40">OR</span>
-          <div className="h-px flex-1 bg-white/10" />
-        </div>
-
-        <button
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          className="w-full rounded-xl border border-white/10 bg-white/5 py-3 font-medium transition hover:bg-white/10 disabled:opacity-50"
-        >
-          Continue with Google
-        </button>
-
-        {error && (
+        {visibleError && (
           <p className="mt-4 text-center text-sm text-red-400">
-            {error}
+            {visibleError}
           </p>
         )}
 

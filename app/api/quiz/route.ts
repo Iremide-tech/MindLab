@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { parseJsonResponse } from "@/lib/ai/json";
 import { isRecord, parseAiRequest } from "@/lib/ai/request";
 import { getGenerationConfig, AI_GENERATION_LIMITS } from "@/lib/ai/token-budget";
+import { parseQuizQuestions } from "@/lib/quiz";
 import { createClient } from "@/lib/supabase/server";
 import { enforceFeatureLimit, getPlanConfig, recordFeatureUsage } from "@/lib/paywall";
 
@@ -11,23 +12,27 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-const expansionSchema = {
+const quizSchema = {
   type: "object",
   properties: {
-    concepts: {
+    questions: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          id: { type: "string" },
-          label: { type: "string" },
-          description: { type: "string" },
+          question: { type: "string" },
+          options: {
+            type: "array",
+            items: { type: "string" },
+          },
+          correctIndex: { type: "integer" },
+          explanation: { type: "string" },
         },
-        required: ["id", "label", "description"],
+        required: ["question", "options", "correctIndex", "explanation"],
       },
     },
   },
-  required: ["concepts"],
+  required: ["questions"],
 };
 
 export async function POST(request: Request) {
@@ -38,15 +43,12 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json(
-        { error: "You must be logged in to continue." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "You must be logged in to take a quiz." }, { status: 401 });
     }
 
     const access = await enforceFeatureLimit({
       userId: user.id,
-      feature: "expand",
+      feature: "quiz",
       request,
     });
 
@@ -64,68 +66,59 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error }, { status: parsed.status });
     }
     if (!isRecord(parsed.data)) {
-      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+      return NextResponse.json({ error: "Invalid quiz request." }, { status: 400 });
     }
-    const { label, description } = parsed.data;
 
+    const { label, description } = parsed.data;
     if (typeof label !== "string" || !label.trim()) {
-      return NextResponse.json(
-        { error: "Concept is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Choose a concept to quiz." }, { status: 400 });
     }
-    if (label.trim().length > 300 || (description !== undefined && (typeof description !== "string" || description.length > 4000))) {
+    if (
+      label.trim().length > 300 ||
+      (description !== undefined &&
+        (typeof description !== "string" || description.length > 4000))
+    ) {
       return NextResponse.json({ error: "Concept details are too long." }, { status: 400 });
     }
 
     const prompt = `
-You are an AI research assistant.
-
-Explore this concept deeper:
+Create a short learning quiz about the concept below.
 
 CONCEPT:
-${label}
+${JSON.stringify(label.trim())}
 
 DESCRIPTION:
-${description || "No description provided."}
+${JSON.stringify(typeof description === "string" ? description : "No description provided.")}
 
-Generate 4-6 concepts that would help a learner investigate
-this concept further.
-
-Rules:
-- Concepts must be genuinely related.
-- Avoid repeating the original concept.
-- Prefer concepts that reveal different aspects of the topic.
-- Keep labels short.
-- Give each concept a clear, learner-friendly description.
-- Every ID must be unique.
+Return exactly three questions. Each question must have exactly four distinct answer options, one correct answer represented by correctIndex (0 through 3), and a concise explanation of why that answer is correct. Test understanding of this concept, not unrelated trivia. Avoid trick questions and ensure the correct answer is unambiguous.
 `;
 
     const response = await ai.interactions.create({
       model: "gemini-3.8-flash",
       input: prompt,
-      generation_config: getGenerationConfig(AI_GENERATION_LIMITS.expand),
+      generation_config: getGenerationConfig(AI_GENERATION_LIMITS.quiz),
       response_format: {
         type: "text",
         mime_type: "application/json",
-        schema: expansionSchema,
+        schema: quizSchema,
       },
     });
 
-    if (!response.output_text) throw new Error("AI returned an empty response.");
-    const result = parseJsonResponse(response.output_text);
+    if (!response.output_text) throw new Error("AI returned an empty quiz.");
+    const output = parseJsonResponse(response.output_text);
+    const questions = isRecord(output) ? parseQuizQuestions(output.questions) : null;
+    if (!questions) throw new Error("AI returned an invalid quiz.");
 
     await recordFeatureUsage({
       userId: user.id,
-      feature: "expand",
+      feature: "quiz",
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({ questions });
   } catch (error) {
-    console.error("Expand error:", error);
-
+    console.error("Quiz generation error:", error);
     return NextResponse.json(
-      { error: "AI expansion is temporarily unavailable. Please try again." },
+      { error: "Quiz generation is temporarily unavailable. Please try again." },
       { status: 502 }
     );
   }

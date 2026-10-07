@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "./supabase/admin.ts";
 
 export type PlanCode = "free" | "student" | "research";
 
@@ -8,6 +8,7 @@ export type PlanConfig = {
   code: PlanCode;
   name: string;
   maxGenerationsPerDay: number;
+  mindMapNodeCount: number;
   features: string[];
 };
 
@@ -16,18 +17,21 @@ export const PLAN_CONFIG: Record<PlanCode, PlanConfig> = {
     code: "free",
     name: "Free",
     maxGenerationsPerDay: 3,
+    mindMapNodeCount: 5,
     features: ["basic-generation"],
   },
   student: {
     code: "student",
     name: "Student",
     maxGenerationsPerDay: 25,
+    mindMapNodeCount: 8,
     features: ["priority-generation", "concept-exploration"],
   },
   research: {
     code: "research",
     name: "Research",
     maxGenerationsPerDay: Number.POSITIVE_INFINITY,
+    mindMapNodeCount: 10,
     features: ["unlimited-generation", "advanced-reasoning"],
   },
 };
@@ -96,14 +100,10 @@ export function getPlanOverride(
   return undefined;
 }
 
-type SupabaseLike = SupabaseClient;
-
 export async function getPlanState({
-  supabase,
   userId,
   request,
 }: {
-  supabase: SupabaseLike;
   userId: string;
   request?: Request;
 }): Promise<{
@@ -124,7 +124,8 @@ export async function getPlanState({
   }
 
   try {
-    const { data, error } = await supabase
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from("user_plans")
       .select("plan_code, status, current_period_end")
       .eq("user_id", userId)
@@ -174,11 +175,9 @@ export async function getPlanState({
 }
 
 export async function getUsageCountForFeature({
-  supabase,
   userId,
   feature,
 }: {
-  supabase: SupabaseLike;
   userId: string;
   feature: string;
 }): Promise<number> {
@@ -186,7 +185,8 @@ export async function getUsageCountForFeature({
     const start = new Date();
     start.setHours(0, 0, 0, 0);
 
-    const { count, error } = await supabase
+    const admin = createAdminClient();
+    const { count, error } = await admin
       .from("user_usage_events")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
@@ -208,16 +208,15 @@ export async function getUsageCountForFeature({
 }
 
 export async function recordFeatureUsage({
-  supabase,
   userId,
   feature,
 }: {
-  supabase: SupabaseLike;
   userId: string;
   feature: string;
 }): Promise<boolean> {
   try {
-    const { error } = await supabase.from("user_usage_events").insert({
+    const admin = createAdminClient();
+    const { error } = await admin.from("user_usage_events").insert({
       user_id: userId,
       feature,
       created_at: new Date().toISOString(),
@@ -231,12 +230,10 @@ export async function recordFeatureUsage({
 }
 
 export async function enforceFeatureLimit({
-  supabase,
   userId,
   feature,
   request,
 }: {
-  supabase: SupabaseLike;
   userId: string;
   feature: string;
   request?: Request;
@@ -247,8 +244,8 @@ export async function enforceFeatureLimit({
   usageCount: number;
   message?: string;
 }> {
-  const state = await getPlanState({ supabase, userId, request });
-  const usageCount = await getUsageCountForFeature({ supabase, userId, feature });
+  const state = await getPlanState({ userId, request });
+  const usageCount = await getUsageCountForFeature({ userId, feature });
   const allowed = isUsageAllowed({
     planCode: state.planCode,
     usageCount,

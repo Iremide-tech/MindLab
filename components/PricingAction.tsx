@@ -32,7 +32,7 @@ export default function PricingAction({
       };
 
       if (response.status === 401) {
-        router.push("/login?next=/pricing");
+        router.push("/login?redirect=%2Fpricing");
         return;
       }
 
@@ -55,7 +55,7 @@ export default function PricingAction({
     return (
       <a
         href="/dashboard"
-        className="inline-flex w-full items-center justify-center rounded-lg bg-slate-800 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+        className="inline-flex w-full items-center justify-center rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
       >
         Continue free
       </a>
@@ -71,8 +71,8 @@ export default function PricingAction({
         className={[
           "inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60",
           highlighted
-            ? "bg-cyan-400 text-slate-950 hover:bg-cyan-300"
-            : "bg-slate-800 text-white hover:bg-slate-700",
+            ? "bg-lab-lime text-lab-ink hover:bg-lab-lime-light"
+            : "border border-white/10 bg-white/5 text-white hover:bg-white/10",
         ].join(" ")}
       >
         {loading ? "Connecting to Paystack..." : "Choose plan"}

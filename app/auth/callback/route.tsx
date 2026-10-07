@@ -7,19 +7,22 @@ export async function GET(request: Request) {
   const returnPath = getSafePostAuthPath(searchParams.get("redirect"));
 
   const code = searchParams.get("code");
+  const authError = searchParams.get("error");
 
-  if (code) {
-    const supabase = await createClient();
-
-    const { error } =
-      await supabase.auth.exchangeCodeForSession(code);
-
-    if (!error) {
-      return NextResponse.redirect(new URL(returnPath, origin));
-    }
+  if (authError || !code) {
+    return NextResponse.redirect(new URL("/login?error=google_signin_failed", origin));
   }
 
-  return NextResponse.redirect(
-    `${origin}/login?error=auth_callback_failed`
-  );
+  const supabase = await createClient();
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  if (!error) {
+    return NextResponse.redirect(new URL(returnPath, origin));
+  }
+
+  const errorCode = /already exists|duplicate key|auth_email_claims/i.test(error.message)
+    ? "gmail_account_exists"
+    : "google_signin_failed";
+  return NextResponse.redirect(new URL(`/login?error=${errorCode}`, origin));
 }

@@ -9,6 +9,8 @@ import {
   type Node,
   type Edge,
   type Connection,
+  type OnNodesChange,
+  type OnEdgesChange,
 } from "@xyflow/react";
 
 import "@xyflow/react/dist/style.css";
@@ -16,8 +18,8 @@ import "@xyflow/react/dist/style.css";
 type MindMapProps = {
   nodes: Node[];
   edges: Edge[];
-  onNodesChange: any;
-  onEdgesChange: any;
+  onNodesChange: OnNodesChange<Node>;
+  onEdgesChange: OnEdgesChange<Edge>;
   onConnect: (connection: Connection) => void;
   onNodeClick: (
     event: React.MouseEvent,
@@ -56,6 +58,7 @@ export default function MindMap({
         <MiniMap
           nodeColor="#c8f169"
           maskColor="rgba(0, 0, 0, 0.75)"
+          style={{ width: 120, height: 80, right: 8, bottom: 8 }}
         />
       </ReactFlow>
     </div>

@@ -27,6 +27,12 @@ RESEND_FROM_EMAIL=MindLab <invites@your-verified-domain.com>
 
 Verify the sender domain in Resend before sending from it. Keep `RESEND_API_KEY` server-only; do not prefix it with `NEXT_PUBLIC_` or commit it. The invitation email links to the existing `/invite/[token]` acceptance page.
 
+## Google Sign-In and Gmail Identity
+
+Apply `supabase/migrations/20261004000000_gmail_identity_guard.sql` after the existing migrations. It prevents a second Auth account from using the same Gmail identity, including dotted addresses, `+tag` aliases, and `googlemail.com` variants. If the migration reports existing duplicate identities, resolve those accounts before retrying; it does not merge accounts or their data.
+
+To enable Google sign-in, enable the Google provider in Supabase Auth and add the Supabase Auth callback URL shown in its provider settings to the Google Cloud OAuth client's authorized redirect URIs. Add both local and production app callback URLs (`http://localhost:3000/auth/callback` and `https://your-domain.example/auth/callback`) to Supabase Auth's redirect URL allow list. Keep Google client secrets in Supabase, not in browser code.
+
 ## Paystack Billing
 
 Paid tiers use monthly USD subscriptions. Create two monthly plans in the Paystack dashboard for the live integration: Student at USD 12 and Research at USD 29. Use Paystack test keys and test plan codes in `.env.local`; configure the matching live plan codes and live secret key only in your production deployment:

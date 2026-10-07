@@ -40,10 +40,12 @@ export async function updateSession(request: NextRequest) {
 
   const isPublicRoute =
   pathname === "/" ||
+  pathname === "/pricing" ||
   pathname.startsWith("/login") ||
   pathname.startsWith("/signup") ||
   pathname.startsWith("/auth") ||
   pathname.startsWith("/invite") ||
+  pathname === "/api/payments/webhook" ||
   pathname.startsWith("/api/invitations/");
   
   if (!user && !isPublicRoute) {

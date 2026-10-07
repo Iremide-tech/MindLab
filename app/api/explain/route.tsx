@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
 import { isRecord, parseAiRequest } from "@/lib/ai/request";
+import { getGenerationConfig, AI_GENERATION_LIMITS } from "@/lib/ai/token-budget";
 import { createClient } from "@/lib/supabase/server";
 import { enforceFeatureLimit, getPlanConfig, recordFeatureUsage } from "@/lib/paywall";
 
@@ -24,7 +25,6 @@ export async function POST(request: Request) {
     }
 
     const access = await enforceFeatureLimit({
-      supabase,
       userId: user.id,
       feature: "explain",
       request,
@@ -81,10 +81,10 @@ Rules:
     const response = await ai.interactions.create({
       model: "gemini-3.8-flash",
       input: prompt,
+      generation_config: getGenerationConfig(AI_GENERATION_LIMITS.explain),
     });
 
     await recordFeatureUsage({
-      supabase,
       userId: user.id,
       feature: "explain",
     });

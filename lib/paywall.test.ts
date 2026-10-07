@@ -14,6 +14,7 @@ test("default plan resolves to free", () => {
     code: "free",
     name: "Free",
     maxGenerationsPerDay: 3,
+    mindMapNodeCount: 5,
     features: ["basic-generation"],
   });
 });
@@ -22,6 +23,12 @@ test("research plan allows unlimited generation", () => {
   const research = getPlanConfig("research");
   assert.equal(research.code, "research");
   assert.equal(research.maxGenerationsPerDay, Number.POSITIVE_INFINITY);
+});
+
+test("mind map node counts increase with plan tier", () => {
+  assert.equal(getPlanConfig("free").mindMapNodeCount, 5);
+  assert.equal(getPlanConfig("student").mindMapNodeCount, 8);
+  assert.equal(getPlanConfig("research").mindMapNodeCount, 10);
 });
 
 test("usage checks enforce the free plan limit", () => {

@@ -33,7 +33,7 @@ export default function SignupPage() {
     callbackUrl.searchParams.set("redirect", returnPath);
 
     const { error } = await supabase.auth.signUp({
-      email,
+      email: email.trim().toLowerCase(),
       password,
       options: {
         emailRedirectTo: callbackUrl.toString(),
@@ -41,7 +41,11 @@ export default function SignupPage() {
     });
 
     if (error) {
-      setError("Unable to create your account. Check your details and try again.");
+      setError(
+        /already exists|already registered|duplicate key/i.test(error.message)
+          ? "An account already exists for this Gmail address. Sign in to that account instead."
+          : "Unable to create your account. Check your details and try again."
+      );
     } else {
       setMessage(
         "Account created! Check your email to confirm your account."
@@ -49,29 +53,6 @@ export default function SignupPage() {
     }
 
     setLoading(false);
-  }
-
-  async function handleGoogleSignup() {
-    setLoading(true);
-    setError(null);
-
-    const returnPath = getSafePostAuthPath(
-      new URLSearchParams(window.location.search).get("redirect")
-    );
-    const callbackUrl = new URL("/auth/callback", window.location.origin);
-    callbackUrl.searchParams.set("redirect", returnPath);
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: callbackUrl.toString(),
-      },
-    });
-
-    if (error) {
-      setError("Unable to sign up with that provider. Please try again.");
-      setLoading(false);
-    }
   }
 
   return (
@@ -115,20 +96,6 @@ export default function SignupPage() {
             {loading ? "Creating account..." : "Create account"}
           </button>
         </form>
-
-        <div className="my-5 flex items-center gap-3">
-          <div className="h-px flex-1 bg-white/10" />
-          <span className="text-xs text-white/40">OR</span>
-          <div className="h-px flex-1 bg-white/10" />
-        </div>
-
-        <button
-          onClick={handleGoogleSignup}
-          disabled={loading}
-          className="w-full rounded-xl border border-white/10 bg-white/5 py-3 font-medium transition hover:bg-white/10 disabled:opacity-50"
-        >
-          Continue with Google
-        </button>
 
         {error && (
           <p className="mt-4 text-center text-sm text-red-400">

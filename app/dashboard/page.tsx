@@ -14,6 +14,7 @@ import {
 
 import MindMap from "@/components/Mindmap";
 import KnowledgePanel from "@/components/KnowledgePanel";
+import BillingSummary from "@/components/BillingSummary";
 
 import type { MindMapNode } from "@/lib/mindmap";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +32,15 @@ type WorkspaceMember = {
   user_id: string;
   email: string | null;
   role: "owner" | "collaborator";
+  created_at: string;
+};
+
+type SavedResearchMap = {
+  id: string;
+  user_id: string;
+  title: string;
+  nodes: Node[];
+  edges: Edge[];
   created_at: string;
 };
 
@@ -67,15 +77,19 @@ export default function Home() {
 
   const [connectionExplanation, setConnectionExplanation] =
     useState<string | null>(null);
+  const [linkedTopics, setLinkedTopics] = useState<[Node, Node] | null>(null);
+  const [connectionOpinion, setConnectionOpinion] = useState("");
+  const [connectionOpinionError, setConnectionOpinionError] = useState<string | null>(null);
 
   const [connecting, setConnecting] = useState(false);
+  const [refiningConnection, setRefiningConnection] = useState(false);
   const [expanding, setExpanding] = useState(false);
 
   const [saving, setSaving] = useState(false);
 const [saveMessage, setSaveMessage] = useState<string | null>(null);
 const [mapTitle, setMapTitle] = useState("Untitled research map");
 
-const [savedMaps, setSavedMaps] = useState<any[]>([]);
+const [savedMaps, setSavedMaps] = useState<SavedResearchMap[]>([]);
 const [loadingMaps, setLoadingMaps] = useState(false);
 const [showSavedMaps, setShowSavedMaps] = useState(false);
 const [currentMapId, setCurrentMapId] = useState<string | null>(null);
@@ -558,6 +572,9 @@ const startAngle =
 
     setConnecting(true);
     setConnectionExplanation(null);
+    setLinkedTopics(null);
+    setConnectionOpinion("");
+    setConnectionOpinionError(null);
 
     const [first, second] =
       selectedForConnection;
@@ -655,6 +672,7 @@ const startAngle =
       setConnectionExplanation(
         data.summary
       );
+      setLinkedTopics([first, second]);
 
       // Reset connection mode
       setSelectedForConnection([]);
@@ -673,6 +691,47 @@ const startAngle =
     }
   }
 
+  async function refineConnection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!linkedTopics || !connectionOpinion.trim()) return;
+
+    setRefiningConnection(true);
+    setConnectionOpinionError(null);
+    const [first, second] = linkedTopics;
+
+    try {
+      const response = await fetch("/api/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topicA: {
+            id: first.id,
+            label: first.data.label,
+            description: first.data.description,
+          },
+          topicB: {
+            id: second.id,
+            label: second.data.label,
+            description: second.data.description,
+          },
+          opinion: connectionOpinion.trim(),
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to refine the explanation.");
+      }
+
+      setConnectionExplanation(data.summary);
+    } catch (error) {
+      console.error("Connection refinement error:", error);
+      setConnectionOpinionError("Couldn't refine the explanation. Please try again.");
+    } finally {
+      setRefiningConnection(false);
+    }
+  }
+
   // --------------------------------------------------
   // Toggle connection mode
   // --------------------------------------------------
@@ -684,6 +743,9 @@ const startAngle =
 
     setSelectedForConnection([]);
     setConnectionExplanation(null);
+    setLinkedTopics(null);
+    setConnectionOpinion("");
+    setConnectionOpinionError(null);
     setSelectedNode(null);
   }
 
@@ -746,7 +808,7 @@ async function saveCurrentMap() {
  
 
 
-function openSavedMap(map: any) {
+function openSavedMap(map: SavedResearchMap) {
   setNodes(map.nodes ?? []);
   setEdges(map.edges ?? []);
   setMapTitle(map.title ?? "Untitled research map");
@@ -878,15 +940,15 @@ async function copyInvitationLink() {
 }
 
 return (
-  <main className="relative h-screen w-screen overflow-hidden bg-background text-foreground">
+  <main className="relative h-dvh w-full overflow-hidden bg-background text-foreground">
 
       {/* HEADER */}
 
-      <header className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between border-b border-white/10 bg-background/70 px-6 py-4 backdrop-blur-xl">
+      <header className="absolute left-0 right-0 top-0 z-30 flex flex-col gap-2 border-b border-white/10 bg-background/90 px-3 py-2 backdrop-blur-xl sm:px-5 sm:py-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
 
         {/* Logo */}
 
-        <div>
+        <div className="flex items-center justify-between gap-2 2xl:block">
           <h1 className="text-xl font-bold tracking-tight">
             MindLab
             <span className="text-lab-lime">
@@ -897,15 +959,26 @@ return (
           <p className="text-xs text-white/40">
             Turn thoughts into knowledge
           </p>
+
+          <div className="flex shrink-0 items-center gap-2 2xl:hidden">
+            <BillingSummary />
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="min-h-10 rounded-lg border border-red-400/20 bg-red-500/10 px-3 text-xs text-red-300 transition hover:bg-red-500/20"
+            >
+              Log out
+            </button>
+          </div>
         </div>
 
         {/* Controls */}
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 2xl:w-auto 2xl:overflow-visible 2xl:pb-0">
 
 
          {saveMessage && (
-  <p className="text-xs text-white/60">
+  <p className="hidden text-xs text-white/60 2xl:block">
     {saveMessage}
   </p>
 )}
@@ -913,7 +986,7 @@ return (
 
           <form
             onSubmit={generateMindMap}
-            className="flex gap-2"
+            className="flex shrink-0 gap-2"
           >
             <input
               value={topic}
@@ -921,13 +994,13 @@ return (
                 setTopic(e.target.value)
               }
               placeholder="Add a research topic..."
-              className="w-80 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-lab-lime/50 focus:bg-white/10"
+              className="w-40 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-lab-lime/50 focus:bg-white/10 sm:w-56 sm:px-4 2xl:w-80"
             />
 
             <button
               type="submit"
               disabled={loading}
-              className="rounded-xl bg-lab-lime px-5 py-2 text-sm font-medium text-lab-ink transition hover:bg-lab-lime-light disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-10 whitespace-nowrap rounded-xl bg-lab-lime px-3 py-2 text-sm font-medium text-lab-ink transition hover:bg-lab-lime-light disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 2xl:px-5"
             >
               {loading
                 ? "Thinking..."
@@ -940,7 +1013,7 @@ return (
           <button
             type="button"
             onClick={toggleConnectMode}
-            className={`rounded-xl border px-5 py-2 text-sm font-medium transition ${
+            className={`min-h-10 shrink-0 whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-medium transition sm:px-4 2xl:px-5 ${
               connectMode
                 ? "border-lab-lime bg-lab-lime/20 text-lab-lime-light"
                 : "border-white/10 bg-white/5 hover:bg-white/10"
@@ -956,7 +1029,7 @@ return (
     setShowSavedMaps(true);
     loadSavedMaps();
   }}
-  className="rounded-xl border border-white/10 bg-white/5 px-5 py-2 text-sm font-medium transition hover:bg-white/10"
+  className="min-h-10 shrink-0 whitespace-nowrap rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium transition hover:bg-white/10 sm:px-4 2xl:px-5"
 >
   Saved Maps
 </button>
@@ -966,7 +1039,7 @@ return (
   type="button"
   onClick={saveCurrentMap}
   disabled={saving || nodes.length === 0}
-  className="rounded-xl border border-lab-copper/20 bg-lab-copper/10 px-5 py-2 text-sm font-medium text-lab-copper transition hover:bg-lab-copper/20 disabled:cursor-not-allowed disabled:opacity-40"
+  className="min-h-10 shrink-0 whitespace-nowrap rounded-xl border border-lab-copper/20 bg-lab-copper/10 px-3 py-2 text-sm font-medium text-lab-copper transition hover:bg-lab-copper/20 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 2xl:px-5"
 >
   {saving ? "Saving..." : "Save Map"}
 </button>
@@ -980,7 +1053,7 @@ return (
       setShowShare(true);
       void loadCollaborators();
     }}
-    className="rounded-xl border border-lab-lime/20 bg-lab-lime/10 px-5 py-2 text-sm font-medium text-lab-lime-light transition hover:bg-lab-lime/20"
+    className="min-h-10 shrink-0 whitespace-nowrap rounded-xl border border-lab-lime/20 bg-lab-lime/10 px-3 py-2 text-sm font-medium text-lab-lime-light transition hover:bg-lab-lime/20 sm:px-4 2xl:px-5"
   >
     Invite
   </button>
@@ -989,14 +1062,19 @@ return (
         </div>
         
 {userEmail && (
-  <span className="hidden max-w-52 truncate rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 sm:block">
+  <span className="hidden max-w-52 truncate rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 2xl:block">
     {userEmail}
   </span>
 )}
 
+<div className="hidden 2xl:block">
+  <BillingSummary />
+</div>
+
 <button
+  type="button"
   onClick={handleLogout}
-  className="rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm text-red-300 hover:bg-red-500/20"
+  className="hidden min-h-10 whitespace-nowrap rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm text-red-300 transition hover:bg-red-500/20 2xl:block"
 >
   Log out
 </button>
@@ -1005,7 +1083,7 @@ return (
       {/* CONNECTION MODE */}
 
       {connectMode && (
-        <div className="absolute left-1/2 top-24 z-40 -translate-x-1/2 rounded-2xl border border-lab-lime/20 bg-lab-surface/90 px-6 py-4 text-center shadow-2xl backdrop-blur-xl">
+        <div className="absolute left-1/2 top-[120px] z-40 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-lab-lime/20 bg-lab-surface/90 px-4 py-4 text-center shadow-2xl backdrop-blur-xl 2xl:top-24 sm:px-6">
 
           <p className="text-sm text-white/70">
             Select two concepts
@@ -1036,7 +1114,7 @@ return (
     
 
       {connectionExplanation && (
-        <div className="absolute bottom-6 left-1/2 z-40 w-[420px] -translate-x-1/2 rounded-2xl border border-lab-lime/20 bg-lab-surface/95 p-5 shadow-2xl backdrop-blur-xl">
+        <div className="absolute bottom-3 left-3 right-3 z-40 rounded-2xl border border-lab-lime/20 bg-lab-surface/95 p-4 shadow-2xl backdrop-blur-xl sm:bottom-6 sm:left-1/2 sm:right-auto sm:w-[min(420px,calc(100vw-2rem))] sm:-translate-x-1/2 sm:p-5">
 
           <div className="mb-2 flex items-center gap-2">
 
@@ -1054,10 +1132,46 @@ return (
             {connectionExplanation}
           </p>
 
+          {linkedTopics && (
+            <form onSubmit={refineConnection} className="mt-4 space-y-2">
+              <label
+                htmlFor="connection-opinion"
+                className="block text-xs font-medium text-white/70"
+              >
+                What&apos;s your opinion?
+              </label>
+              <textarea
+                id="connection-opinion"
+                value={connectionOpinion}
+                onChange={(event) => setConnectionOpinion(event.target.value)}
+                maxLength={1000}
+                rows={2}
+                placeholder="Share what you're trying to understand..."
+                disabled={refiningConnection}
+                className="w-full resize-y rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-lab-lime/50 disabled:opacity-60"
+              />
+              {connectionOpinionError && (
+                <p role="alert" className="text-xs text-red-300">
+                  {connectionOpinionError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={refiningConnection || !connectionOpinion.trim()}
+                className="rounded-lg bg-lab-lime px-3 py-2 text-xs font-medium text-lab-ink transition hover:bg-lab-lime-light disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {refiningConnection ? "Refining..." : "Refine explanation"}
+              </button>
+            </form>
+          )}
+
           <button
-            onClick={() =>
-              setConnectionExplanation(null)
-            }
+            onClick={() => {
+              setConnectionExplanation(null);
+              setLinkedTopics(null);
+              setConnectionOpinion("");
+              setConnectionOpinionError(null);
+            }}
             className="mt-4 text-xs text-white/40 transition hover:text-white"
           >
             Dismiss
@@ -1068,7 +1182,7 @@ return (
 
       
 {showSavedMaps && (
-  <div className="absolute right-6 top-24 z-50 w-80 rounded-2xl border border-white/10 bg-lab-surface/95 p-5 shadow-2xl backdrop-blur-xl">
+  <div className="absolute left-3 right-3 top-[120px] z-50 max-h-[calc(100dvh-9rem)] overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface/95 p-4 shadow-2xl backdrop-blur-xl sm:left-auto sm:right-6 sm:top-24 sm:w-80 sm:p-5">
     <div className="mb-4 flex items-center justify-between">
       <h2 className="font-semibold">Saved Maps</h2>
 
@@ -1239,7 +1353,7 @@ return (
 
       {/* CANVAS */}
 
-      <div className="h-full w-full pt-[73px]">
+      <div className="h-full w-full pt-[116px] 2xl:pt-[73px]">
 
         <MindMap
           nodes={nodes}

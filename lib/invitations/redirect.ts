@@ -6,7 +6,13 @@ export function getSafePostAuthPath(value: string | null) {
   try {
     const url = new URL(value, redirectOrigin);
     if (url.origin !== redirectOrigin) return "/dashboard";
-    if (!url.pathname.startsWith("/invite/")) return "/dashboard";
+    if (
+      url.pathname !== "/dashboard" &&
+      url.pathname !== "/pricing" &&
+      !url.pathname.startsWith("/invite/")
+    ) {
+      return "/dashboard";
+    }
 
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
