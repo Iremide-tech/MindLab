@@ -1,194 +1,146 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import Stripe from "stripe";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { normalizePlanCode } from "@/lib/paywall";
+import {
+  createStripeClient,
+  getStripePriceId,
+  isPaidPlanCode,
+  mapStripeSubscriptionStatus,
+  type PaidPlanCode,
+} from "@/lib/stripe-billing";
 
-const planAmountsUsdCents = {
-  student: 1200,
-  research: 2900,
-} as const;
-
-function nextMonthlyPeriod(paidAt?: string) {
-  const end = paidAt ? new Date(paidAt) : new Date();
-  if (Number.isNaN(end.getTime())) {
-    return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+async function syncSubscription({
+  admin,
+  subscription,
+  userId,
+  planCode,
+  customerEmail,
+}: {
+  admin: ReturnType<typeof createAdminClient>;
+  subscription: Stripe.Subscription;
+  userId: string;
+  planCode: PaidPlanCode;
+  customerEmail?: string | null;
+}): Promise<void> {
+  const expectedPriceId = getStripePriceId(planCode);
+  if (
+    !expectedPriceId ||
+    subscription.items.data.length !== 1 ||
+    subscription.items.data[0]?.price.id !== expectedPriceId
+  ) {
+    console.error("Stripe subscription price did not match the configured plan.", {
+      subscriptionId: subscription.id,
+      planCode,
+    });
+    return;
   }
-  end.setMonth(end.getMonth() + 1);
-  return end.toISOString();
+
+  const status = mapStripeSubscriptionStatus(
+    subscription.status,
+    subscription.cancel_at_period_end
+  );
+  if (!status) return;
+
+  const customerId = typeof subscription.customer === "string"
+    ? subscription.customer
+    : subscription.customer.id;
+  const currentPeriodEnd = subscription.items.data[0]?.current_period_end;
+  const periodEnd = currentPeriodEnd
+    ? new Date(currentPeriodEnd * 1000).toISOString()
+    : null;
+  const planRecord: Record<string, unknown> = {
+    user_id: userId,
+    plan_code: planCode,
+    status,
+    provider: "stripe",
+    provider_reference: subscription.id,
+    stripe_customer_id: customerId,
+    stripe_subscription_id: subscription.id,
+    current_period_end: periodEnd,
+    updated_at: new Date().toISOString(),
+  };
+  if (customerEmail) planRecord.customer_email = customerEmail;
+
+  const { error } = await admin
+    .from("user_plans")
+    .upsert(planRecord, { onConflict: "user_id" });
+  if (error) throw error;
 }
 
 export async function POST(request: Request) {
-  const payload = await request.text();
-  const signature = request.headers.get("x-paystack-signature");
-  const secret = process.env.PAYSTACK_SECRET_KEY;
-
-  if (!secret) {
-    return new NextResponse("Webhook not configured.", { status: 503 });
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!process.env.STRIPE_SECRET_KEY || !webhookSecret) {
+    return new NextResponse("Stripe webhook is not configured.", { status: 503 });
   }
 
-  if (!signature || !/^[a-f\d]{128}$/i.test(signature)) {
-    return new NextResponse("Missing signature.", { status: 400 });
+  const signature = request.headers.get("stripe-signature");
+  if (!signature) {
+    return new NextResponse("Missing Stripe signature.", { status: 400 });
   }
 
-  const expected = createHmac("sha512", secret).update(payload).digest("hex");
-  if (!timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(signature, "hex"))) {
-    return new NextResponse("Invalid signature.", { status: 400 });
+  let event: Stripe.Event;
+  try {
+    event = createStripeClient().webhooks.constructEvent(
+      await request.text(),
+      signature,
+      webhookSecret
+    );
+  } catch (error) {
+    console.warn("Stripe webhook signature or payload validation failed:", error);
+    return new NextResponse("Invalid Stripe webhook.", { status: 400 });
   }
 
   try {
-    const event = JSON.parse(payload) as {
-      event?: string;
-      data?: {
-        metadata?: { user_id?: string; plan?: string };
-        reference?: string;
-        customer?: { email?: string; customer_code?: string };
-        amount?: number;
-        currency?: string;
-        paid_at?: string;
-        status?: string;
-        subscription_code?: string;
-        plan?: { plan_code?: string };
-        next_payment_date?: string;
-      };
-    };
-
-    const eventName = event.event;
-    const data = event.data ?? {};
+    const stripe = createStripeClient();
     const admin = createAdminClient();
 
-    if (eventName === "charge.success") {
-      if (!data.reference) {
-        return new NextResponse("Missing transaction reference.", { status: 400 });
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const subscriptionId = typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription?.id;
+      const userId = session.metadata?.user_id ?? session.client_reference_id;
+      const planCode = session.metadata?.plan;
+
+      if (session.mode !== "subscription" || !subscriptionId || !userId || !isPaidPlanCode(planCode)) {
+        console.warn("Ignoring Stripe checkout with incomplete plan metadata.", {
+          sessionId: session.id,
+        });
+        return new NextResponse("ok", { status: 200 });
       }
 
-      const verificationResponse = await fetch(
-        `https://api.paystack.co/transaction/verify/${encodeURIComponent(data.reference)}`,
-        { headers: { Authorization: `Bearer ${secret}` }, cache: "no-store" }
-      );
-      if (!verificationResponse.ok) {
-        return new NextResponse("Unable to verify transaction.", { status: 502 });
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      await syncSubscription({
+        admin,
+        subscription,
+        userId,
+        planCode,
+        customerEmail: session.customer_details?.email ?? session.customer_email,
+      });
+    } else if (
+      event.type === "customer.subscription.created" ||
+      event.type === "customer.subscription.updated" ||
+      event.type === "customer.subscription.deleted"
+    ) {
+      const eventSubscription = event.data.object as Stripe.Subscription;
+      const subscription = await stripe.subscriptions.retrieve(eventSubscription.id);
+      const userId = subscription.metadata.user_id;
+      const planCode = subscription.metadata.plan;
+
+      if (!userId || !isPaidPlanCode(planCode)) {
+        console.warn("Ignoring Stripe subscription with incomplete plan metadata.", {
+          subscriptionId: subscription.id,
+        });
+        return new NextResponse("ok", { status: 200 });
       }
 
-      const verification = (await verificationResponse.json()) as {
-        status?: boolean;
-        data?: { status?: string; amount?: number; currency?: string; paid_at?: string };
-      };
-      if (
-        !verification.status ||
-        verification.data?.status !== "success" ||
-        verification.data.currency !== "USD"
-      ) {
-        return new NextResponse("Payment verification failed.", { status: 400 });
-      }
-
-      const { data: checkout, error: checkoutError } = await admin
-        .from("paystack_checkout_sessions")
-        .select("reference, user_id, plan_code, completed_at")
-        .eq("reference", data.reference)
-        .maybeSingle();
-
-      let userId = checkout?.user_id as string | undefined;
-      let planCode = checkout?.plan_code as "student" | "research" | undefined;
-
-      if (!checkout && data.customer?.customer_code) {
-        const { data: existingPlan, error: planLookupError } = await admin
-          .from("user_plans")
-          .select("user_id, plan_code")
-          .eq("paystack_customer_code", data.customer.customer_code)
-          .maybeSingle();
-        if (planLookupError) {
-          console.error("Unable to match recurring Paystack customer:", planLookupError);
-          return new NextResponse("Unable to match customer.", { status: 500 });
-        }
-        userId = existingPlan?.user_id as string | undefined;
-        planCode = existingPlan?.plan_code as "student" | "research" | undefined;
-      }
-
-      if (checkoutError) {
-        console.error("Unable to read Paystack checkout reference:", checkoutError);
-        return new NextResponse("Unable to find checkout.", { status: 500 });
-      }
-
-      if (!userId || !planCode) {
-        return new NextResponse("No matching checkout.", { status: 200 });
-      }
-
-      if (verification.data.amount !== planAmountsUsdCents[planCode]) {
-        console.error("Paystack amount does not match configured plan:", data.reference);
-        return new NextResponse("Payment amount does not match the plan.", { status: 400 });
-      }
-
-      const { error: planWriteError } = await admin.from("user_plans").upsert(
-        {
-          user_id: userId,
-          plan_code: normalizePlanCode(planCode),
-          status: "active",
-          provider: "paystack",
-          provider_reference: data.reference,
-          customer_email: data.customer?.email ?? null,
-          paystack_customer_code: data.customer?.customer_code ?? null,
-          current_period_end: nextMonthlyPeriod(verification.data.paid_at ?? data.paid_at),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      );
-
-      if (planWriteError) {
-        console.error("Unable to activate paid plan:", planWriteError);
-        return new NextResponse("Unable to activate plan.", { status: 500 });
-      }
-
-      if (checkout) {
-        const { error: completeError } = await admin
-          .from("paystack_checkout_sessions")
-          .update({ completed_at: new Date().toISOString() })
-          .eq("reference", data.reference);
-        if (completeError) {
-          console.error("Unable to mark checkout complete:", completeError);
-        }
-      }
-    } else if (["subscription.create", "subscription.update", "subscription.not_renew", "subscription.disable"].includes(eventName ?? "")) {
-      const customerCode = data.customer?.customer_code;
-      if (customerCode) {
-        const { data: existingPlan, error: lookupError } = await admin
-          .from("user_plans")
-          .select("user_id")
-          .eq("paystack_customer_code", customerCode)
-          .maybeSingle();
-        if (lookupError) {
-          console.error("Unable to match Paystack subscription:", lookupError);
-          return new NextResponse("Unable to match subscription.", { status: 500 });
-        }
-        if (existingPlan?.user_id) {
-          const status = eventName === "subscription.disable"
-            ? "expired"
-            : eventName === "subscription.not_renew"
-              ? "cancelled"
-              : "active";
-          const updates: Record<string, unknown> = {
-            status,
-            paystack_subscription_code: data.subscription_code ?? null,
-            updated_at: new Date().toISOString(),
-          };
-          if (data.next_payment_date) {
-            updates.current_period_end = data.next_payment_date;
-          }
-          const { error: updateError } = await admin
-            .from("user_plans")
-            .update(updates)
-            .eq("user_id", existingPlan.user_id);
-          if (updateError) {
-            console.error("Unable to update subscription status:", updateError);
-            return new NextResponse("Unable to update subscription.", { status: 500 });
-          }
-        }
-      }
+      await syncSubscription({ admin, subscription, userId, planCode });
     }
 
     return new NextResponse("ok", { status: 200 });
   } catch (error) {
-    console.error("Paystack webhook failed:", error);
-    return new NextResponse("bad payload", { status: 400 });
+    console.error("Stripe webhook processing failed:", error);
+    return new NextResponse("Unable to process Stripe webhook.", { status: 500 });
   }
 }

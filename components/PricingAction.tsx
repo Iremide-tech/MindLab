@@ -28,7 +28,7 @@ export default function PricingAction({
       });
       const result = (await response.json()) as {
         error?: string;
-        authorizationUrl?: string;
+        checkoutUrl?: string;
       };
 
       if (response.status === 401) {
@@ -36,11 +36,11 @@ export default function PricingAction({
         return;
       }
 
-      if (!response.ok || !result.authorizationUrl) {
+      if (!response.ok || !result.checkoutUrl) {
         throw new Error(result.error ?? "Checkout could not be started.");
       }
 
-      window.location.assign(result.authorizationUrl);
+      window.location.assign(result.checkoutUrl);
     } catch (checkoutError) {
       setError(
         checkoutError instanceof Error
@@ -75,7 +75,7 @@ export default function PricingAction({
             : "border border-white/10 bg-white/5 text-white hover:bg-white/10",
         ].join(" ")}
       >
-        {loading ? "Connecting to Paystack..." : "Choose plan"}
+        {loading ? "Opening Stripe Checkout..." : "Choose plan"}
       </button>
       {error ? (
         <p role="alert" className="mt-3 text-sm text-rose-300">

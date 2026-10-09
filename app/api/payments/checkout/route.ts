@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 
+import {
+  createStripeClient,
+  getExpectedPlanAmount,
+  getStripePriceId,
+  isPaidPlanCode,
+} from "@/lib/stripe-billing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +35,7 @@ export async function POST(request: Request) {
     }
 
     const requestedPlan = (body as Record<string, unknown>).plan;
-    if (requestedPlan !== "student" && requestedPlan !== "research") {
+    if (!isPaidPlanCode(requestedPlan)) {
       return NextResponse.json({ error: "Choose a valid paid plan." }, { status: 400 });
     }
 
@@ -37,129 +43,95 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Your account needs an email address to check out." }, { status: 400 });
     }
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    const secretKey = process.env.STRIPE_SECRET_KEY;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-    const planCode =
-      requestedPlan === "student"
-        ? process.env.PAYSTACK_STUDENT_PLAN_CODE
-        : process.env.PAYSTACK_RESEARCH_PLAN_CODE;
+    const priceId = getStripePriceId(requestedPlan);
 
-    if (!secretKey || !siteUrl || !planCode) {
+    if (!secretKey || !siteUrl || !priceId) {
       return NextResponse.json(
-        { error: "Live billing is not configured. Set the Paystack secret, site URL, and monthly plan codes." },
+        { error: "Stripe billing is not configured. Set the Stripe secret, monthly price IDs, and site URL." },
         { status: 503 }
       );
     }
 
     if (process.env.NODE_ENV === "production" && !secretKey.startsWith("sk_live_")) {
       return NextResponse.json(
-        { error: "Live billing requires a Paystack live secret key." },
+        { error: "Live billing requires a Stripe live secret key." },
         { status: 503 }
       );
     }
     if (process.env.NODE_ENV !== "production" && secretKey.startsWith("sk_live_")) {
       return NextResponse.json(
-        { error: "Live Paystack keys are disabled in local development. Use test keys locally." },
+        { error: "Live Stripe keys are disabled in local development. Use test keys locally." },
         { status: 503 }
       );
     }
 
-    const expectedAmount = requestedPlan === "student" ? 1200 : 2900;
-    const configuredPlanResponse = await fetch(
-      `https://api.paystack.co/plan/${encodeURIComponent(planCode)}`,
-      { headers: { Authorization: `Bearer ${secretKey}` }, cache: "no-store" }
-    );
-    if (!configuredPlanResponse.ok) {
-      console.error("Paystack monthly plan lookup failed:", await configuredPlanResponse.text());
-      return NextResponse.json({ error: "The selected payment plan is unavailable." }, { status: 503 });
-    }
-
-    const configuredPlan = (await configuredPlanResponse.json()) as {
-      status?: boolean;
-      data?: { amount?: number; currency?: string; interval?: string };
-    };
-    if (
-      !configuredPlan.status ||
-      configuredPlan.data?.amount !== expectedAmount ||
-      configuredPlan.data.currency !== "USD" ||
-      configuredPlan.data.interval !== "monthly"
-    ) {
-      return NextResponse.json(
-        { error: "The Paystack plan must match the displayed USD monthly price." },
-        { status: 503 }
-      );
-    }
-
-    let callbackUrl: string;
+    let siteOrigin: string;
     try {
       const configuredUrl = new URL(siteUrl);
       if (configuredUrl.protocol !== "https:" && configuredUrl.hostname !== "localhost") {
         throw new Error("The site URL must use HTTPS.");
       }
-      callbackUrl = new URL("/pricing?checkout=processing", configuredUrl.origin).toString();
+      siteOrigin = configuredUrl.origin;
     } catch {
       return NextResponse.json({ error: "The site URL is not configured correctly." }, { status: 500 });
     }
 
-    const response = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: user.email,
-        plan: planCode,
-        callback_url: callbackUrl,
-        metadata: {
-          user_id: user.id,
-          plan: requestedPlan,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Paystack checkout failed:", errorText);
+    const stripe = createStripeClient();
+    const price = await stripe.prices.retrieve(priceId);
+    if (
+      !price.active ||
+      price.unit_amount !== getExpectedPlanAmount(requestedPlan) ||
+      price.currency !== "usd" ||
+      price.recurring?.interval !== "month" ||
+      price.recurring.interval_count !== 1
+    ) {
       return NextResponse.json(
-        { error: "We could not start the upgrade checkout. Please try again." },
-        { status: 502 }
-      );
-    }
-
-    const result = (await response.json()) as {
-      status?: boolean;
-      data?: { authorization_url?: string; reference?: string };
-      message?: string;
-    };
-
-    const authorizationUrl = result.data?.authorization_url;
-    const reference = result.data?.reference;
-    if (!result.status || !authorizationUrl || !reference) {
-      return NextResponse.json(
-        { error: result.message ?? "Checkout session could not be created." },
-        { status: 502 }
+        { error: "The Stripe price must match the displayed monthly USD plan." },
+        { status: 503 }
       );
     }
 
     const admin = createAdminClient();
-    const { error: saveError } = await admin.from("paystack_checkout_sessions").insert({
-      reference,
-      user_id: user.id,
-      plan_code: requestedPlan,
+    const { data: existingPlan, error: customerLookupError } = await admin
+      .from("user_plans")
+      .select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (customerLookupError) {
+      console.error("Unable to look up Stripe customer:", customerLookupError);
+      return NextResponse.json(
+        { error: "Billing data is not ready. Apply the Stripe billing migration and try again." },
+        { status: 503 }
+      );
+    }
+
+    const metadata = { user_id: user.id, plan: requestedPlan };
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: new URL("/pricing?checkout=processing", siteOrigin).toString(),
+      cancel_url: new URL("/pricing?checkout=cancelled", siteOrigin).toString(),
+      client_reference_id: user.id,
+      metadata,
+      subscription_data: { metadata },
+      ...(existingPlan?.stripe_customer_id
+        ? { customer: existingPlan.stripe_customer_id }
+        : { customer_email: user.email }),
     });
 
-    if (saveError) {
-      console.error("Unable to save Paystack checkout reference:", saveError);
+    if (!session.url) {
       return NextResponse.json(
-        { error: "We could not prepare the checkout. Please try again." },
-        { status: 500 }
+        { error: "Stripe could not create a checkout URL." },
+        { status: 502 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      authorizationUrl,
+      checkoutUrl: session.url,
       plan: requestedPlan,
     });
   } catch (error) {

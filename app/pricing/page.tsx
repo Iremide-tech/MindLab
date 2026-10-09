@@ -50,7 +50,7 @@ export default async function PricingPage({
           </p>
           {checkout === "processing" ? (
             <p role="status" className="mx-auto mt-5 max-w-2xl text-sm text-lab-lime-soft">
-              We are confirming your payment with Paystack. Your plan will update after the payment is verified.
+              We are confirming your payment with Stripe. Your plan will update after the payment is verified.
             </p>
           ) : null}
         </div>

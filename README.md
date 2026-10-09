@@ -33,21 +33,24 @@ Apply `supabase/migrations/20261004000000_gmail_identity_guard.sql` after the ex
 
 To enable Google sign-in, enable the Google provider in Supabase Auth and add the Supabase Auth callback URL shown in its provider settings to the Google Cloud OAuth client's authorized redirect URIs. Add both local and production app callback URLs (`http://localhost:3000/auth/callback` and `https://your-domain.example/auth/callback`) to Supabase Auth's redirect URL allow list. Keep Google client secrets in Supabase, not in browser code.
 
-## Paystack Billing
+## Stripe Billing
 
-Paid tiers use monthly USD subscriptions. Create two monthly plans in the Paystack dashboard for the live integration: Student at USD 12 and Research at USD 29. Use Paystack test keys and test plan codes in `.env.local`; configure the matching live plan codes and live secret key only in your production deployment:
+Paid tiers use monthly USD Stripe subscriptions: Student at USD 12 and Research at USD 29. Create recurring monthly Stripe Prices for both plans. Configure test-mode keys and Price IDs locally, then use matching live-mode settings in production:
 
 ```env
-PAYSTACK_SECRET_KEY=sk_test_...
-PAYSTACK_STUDENT_PLAN_CODE=PLN_...
-PAYSTACK_RESEARCH_PLAN_CODE=PLN_...
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_STUDENT_PRICE_ID=price_...
+STRIPE_RESEARCH_PRICE_ID=price_...
 SUPABASE_SERVICE_ROLE_KEY=...
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-Set `PAYSTACK_SECRET_KEY` to the `sk_live_...` key and `NEXT_PUBLIC_SITE_URL` to your HTTPS production URL in the deployment environment. Use live plan codes with that live key; test plan codes cannot be used for live payments. Local development rejects live Paystack keys to prevent accidental charges. The service-role key and Paystack secret must never use the `NEXT_PUBLIC_` prefix or be committed. Checkout checks each Paystack plan is monthly and matches its advertised USD amount before sending the customer to Paystack.
+Use `sk_live_...` and live Price IDs only in production; local development rejects live secret keys. Configure the Stripe webhook endpoint as `https://your-domain.example/api/payments/webhook` and subscribe it to `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`. For local webhook testing, run `stripe listen --forward-to localhost:3000/api/payments/webhook` and use the printed signing secret as `STRIPE_WEBHOOK_SECRET`. Keep Stripe and Supabase service-role secrets server-only; never prefix them with `NEXT_PUBLIC_` or commit them.
 
-Apply `supabase/migrations/20261002000000_paywall_mvp.sql` and then `supabase/migrations/20261003000000_paystack_live_billing.sql` to the Supabase project. Configure the Paystack webhook URL as `https://your-domain.example/api/payments/webhook` and subscribe it to `charge.success`, `subscription.create`, `subscription.update`, `subscription.not_renew`, and `subscription.disable` events. Use HTTPS and the same live Paystack integration for the plans, secret key, and webhook.
+Apply `supabase/migrations/20261002000000_paywall_mvp.sql`, `supabase/migrations/20261003000000_paystack_live_billing.sql`, and `supabase/migrations/20261005000000_stripe_billing.sql` to the Supabase project. The Stripe checkout route verifies configured Price IDs are active monthly USD prices matching the displayed amounts before creating a subscription Checkout Session.
+
+For existing Paystack subscribers only, keep `PAYSTACK_SECRET_KEY` configured and point the old Paystack webhook to `https://your-domain.example/api/payments/paystack-webhook` until those subscriptions have ended or been migrated. New checkouts use Stripe exclusively.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
