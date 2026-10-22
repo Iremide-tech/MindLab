@@ -1,3 +1,4 @@
+import CheckoutConfirmation from "@/components/CheckoutConfirmation";
 import PricingAction from "@/components/PricingAction";
 import type { PlanCode } from "@/lib/paywall";
 
@@ -49,9 +50,7 @@ export default async function PricingPage({
             Start free, then move to a plan that supports deeper learning and faster research.
           </p>
           {checkout === "processing" ? (
-            <p role="status" className="mx-auto mt-5 max-w-2xl text-sm text-lab-lime-soft">
-              We are confirming your payment with Stripe. Your plan will update after the payment is verified.
-            </p>
+            <CheckoutConfirmation />
           ) : null}
         </div>
 

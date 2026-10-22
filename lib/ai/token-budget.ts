@@ -1,9 +1,9 @@
 export const AI_GENERATION_LIMITS = {
-  generate: 1200,
+  generate: 3000,
   expand: 800,
   explain: 300,
   connect: 800,
-  quiz: 600,
+  quiz: 1500,
 } as const;
 
 export type AiOperation = keyof typeof AI_GENERATION_LIMITS;

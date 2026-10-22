@@ -30,10 +30,15 @@ export default function KnowledgePanel({
   const [quizError, setQuizError] = useState<string | null>(null);
   const [quizNeedsUpgrade, setQuizNeedsUpgrade] = useState(false);
   const [quizNodeId, setQuizNodeId] = useState<string | null>(null);
+  const [example, setExample] = useState<string | null>(null);
+const [exampleLoading, setExampleLoading] = useState(false);
+const [exampleError, setExampleError] = useState<string | null>(null);
+
 
   if (!node) return null;
   const selectedNode = node;
 
+ 
   async function explainSimpler() {
     setLoading(true);
     setExplanation(null);
@@ -41,11 +46,9 @@ export default function KnowledgePanel({
     try {
       const response = await fetch("/api/explain", {
         method: "POST",
-
         headers: {
           "Content-Type": "application/json",
         },
-
         body: JSON.stringify({
           label: selectedNode.label,
           description: selectedNode.description,
@@ -55,22 +58,54 @@ export default function KnowledgePanel({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          data.error || "Failed to explain concept"
-        );
+        throw new Error(data.error || "Failed to explain concept.");
       }
 
       setExplanation(data.explanation);
     } catch (error) {
       console.error("Explain error:", error);
-
-      setExplanation(
-        "I couldn't explain this concept right now."
-      );
+      setExplanation("I couldn't explain this concept right now.");
     } finally {
       setLoading(false);
     }
   }
+
+  async function giveExample() {
+    setExampleLoading(true);
+    setExampleError(null);
+    setExample(null);
+
+    try {
+      const response = await fetch("/api/explain", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          label: selectedNode.label,
+          description: selectedNode.description,
+          mode: "example",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate example.");
+      }
+
+      setExample(data.explanation);
+    } catch (error) {
+      console.error("Example generation error:", error);
+      setExampleError(
+        "I couldn't generate an example right now. Please try again."
+      );
+    } finally {
+      setExampleLoading(false);
+    }
+  }
+
+
 
   async function generateQuiz() {
     setQuizLoading(true);
@@ -106,6 +141,8 @@ export default function KnowledgePanel({
     } finally {
       setQuizLoading(false);
     }
+
+    
   }
 
   function checkQuizAnswer(questionIndex: number) {
@@ -194,6 +231,27 @@ export default function KnowledgePanel({
         </div>
       )}
 
+      {example && (
+  <div className="mb-5 rounded-xl border border-white/10 bg-white/5 p-4">
+    <div className="mb-2 flex items-center gap-2">
+      <span className="text-lab-lime">✦</span>
+      <span className="text-xs font-medium uppercase tracking-widest text-lab-lime">
+        Real-world example
+      </span>
+    </div>
+
+    <p className="whitespace-pre-wrap text-sm leading-6 text-white/80">
+      {example}
+    </p>
+  </div>
+)}
+
+{exampleError && (
+  <p role="alert" className="mb-4 text-sm text-red-300">
+    {exampleError}
+  </p>
+)}
+
       {/* Action Buttons */}
 
       <div className="grid grid-cols-2 gap-2">
@@ -213,10 +271,13 @@ export default function KnowledgePanel({
         {/* Give Example */}
 
         <button
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm transition hover:bg-white/10"
-        >
-          Give example
-        </button>
+  type="button"
+  onClick={() => void giveExample()}
+  disabled={exampleLoading}
+  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-50"
+>
+  {exampleLoading ? "Generating example..." : "Give example"}
+</button>
 
         {/* Explore Deeper */}
 

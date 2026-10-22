@@ -21,6 +21,15 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(returnPath, origin));
   }
 
+  console.error("Google OAuth session exchange failed.", {
+    errorName: error.name,
+    errorCode: error.code,
+    errorStatus: error.status,
+    errorMessage: error.message,
+    hasAuthorizationCode: Boolean(code),
+    hasFlowId: Boolean(searchParams.get("sb_flow_id")),
+  });
+
   const errorCode = /already exists|duplicate key|auth_email_claims/i.test(error.message)
     ? "gmail_account_exists"
     : "google_signin_failed";

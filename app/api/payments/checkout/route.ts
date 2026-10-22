@@ -109,19 +109,21 @@ export async function POST(request: Request) {
     }
 
     const metadata = { user_id: user.id, plan: requestedPlan };
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: new URL("/pricing?checkout=processing", siteOrigin).toString(),
-      cancel_url: new URL("/pricing?checkout=cancelled", siteOrigin).toString(),
-      client_reference_id: user.id,
-      metadata,
-      subscription_data: { metadata },
-      ...(existingPlan?.stripe_customer_id
-        ? { customer: existingPlan.stripe_customer_id }
-        : { customer_email: user.email }),
-    });
-
+   const session = await stripe.checkout.sessions.create({
+  mode: "subscription",
+  line_items: [{ price: priceId, quantity: 1 }],
+  success_url: new URL(
+    "/pricing?checkout=processing&session_id={CHECKOUT_SESSION_ID}",
+    siteOrigin
+  ).toString(),
+  cancel_url: new URL("/pricing?checkout=cancelled", siteOrigin).toString(),
+  client_reference_id: user.id,
+  metadata,
+  subscription_data: { metadata },
+  ...(existingPlan?.stripe_customer_id
+    ? { customer: existingPlan.stripe_customer_id }
+    : { customer_email: user.email }),
+});
     if (!session.url) {
       return NextResponse.json(
         { error: "Stripe could not create a checkout URL." },
