@@ -28,6 +28,18 @@ test("research plan allows unlimited generation", () => {
   assert.equal(research.featureLimitsPerDay.example, Number.POSITIVE_INFINITY);
 });
 
+test("daily limits scale by plan for quizzes, explanations, and examples", () => {
+  const free = getPlanConfig("free");
+  const student = getPlanConfig("student");
+  const research = getPlanConfig("research");
+
+  for (const feature of ["quiz", "explain", "example"]) {
+    assert.equal(free.featureLimitsPerDay[feature], 2);
+    assert.equal(student.featureLimitsPerDay[feature], 25);
+    assert.equal(research.featureLimitsPerDay[feature], Number.POSITIVE_INFINITY);
+  }
+});
+
 test("mind map node counts increase with plan tier", () => {
   assert.equal(getPlanConfig("free").mindMapNodeCount, 5);
   assert.equal(getPlanConfig("student").mindMapNodeCount, 8);
