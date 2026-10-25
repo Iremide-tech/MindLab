@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -47,6 +48,7 @@ type SavedResearchMap = {
 const supabase = createClient();
 
 export default function Home() {
+  const router = useRouter();
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -112,7 +114,7 @@ useEffect(() => {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      window.location.href = "/login";
+      router.replace("/login");
       return;
     }
 
@@ -145,7 +147,7 @@ useEffect(() => {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((_event, session) => {
     if (!session?.user) {
-      window.location.href = "/login";
+      router.replace("/login");
       return;
     }
 
@@ -156,7 +158,7 @@ useEffect(() => {
   return () => {
     subscription.unsubscribe();
   };
-}, []);
+}, [router, setEdges, setNodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -758,7 +760,7 @@ async function handleLogout() {
     return;
   }
 
-  window.location.href = "/login";
+  router.replace("/login");
 }
 
 
