@@ -762,6 +762,7 @@ async function handleLogout() {
 }
 
 
+
 async function saveCurrentMap() {
   if (nodes.length === 0) {
     setSaveMessage("Generate a map first.");
@@ -771,37 +772,59 @@ async function saveCurrentMap() {
   setSaving(true);
   setSaveMessage(null);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    setSaveMessage("Please log in again.");
-    setSaving(false);
-    return;
-  }
+    if (!user) {
+      setSaveMessage("Please log in again.");
+      return;
+    }
 
-  const { data, error: saveError } = await supabase
-    .from("research_maps")
-    .insert({
-      user_id: user.id,
+    const mapData = {
       title: mapTitle || "Untitled research map",
       nodes,
       edges,
-    })
-    .select("id")
-    .single();
+    };
 
-  if (saveError) {
-    console.error("Failed to save research map:", saveError);
-    setSaveMessage("Could not save your map.");
-  } else {
-    setCurrentMapId(data.id);
-    setCurrentMapOwnerId(user.id);
-    setSaveMessage("Map saved successfully.");
+    if (currentMapId) {
+      // Update the existing workspace instead of creating a duplicate.
+      const { error } = await supabase
+        .from("research_maps")
+        .update(mapData)
+        .eq("id", currentMapId);
+
+      if (error) throw error;
+
+      setSaveMessage("Workspace updated successfully.");
+    } else {
+      // Only create a database row for a brand-new workspace.
+      const { data, error } = await supabase
+        .from("research_maps")
+        .insert({
+          user_id: user.id,
+          ...mapData,
+        })
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      setCurrentMapId(data.id);
+      setCurrentMapOwnerId(user.id);
+      setSaveMessage("Workspace saved successfully.");
+    }
+  } catch (error) {
+    console.error("Failed to save workspace:", error);
+    setSaveMessage(
+      error instanceof Error
+        ? error.message
+        : "Could not save your workspace."
+    );
+  } finally {
+    setSaving(false);
   }
-
-  setSaving(false);
 }
 
 
