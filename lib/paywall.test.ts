@@ -13,7 +13,8 @@ test("default plan resolves to free", () => {
   assert.deepEqual(getPlanConfig("free"), {
     code: "free",
     name: "Free",
-    maxGenerationsPerDay: 3,
+    maxGenerationsPerDay: 2,
+    featureLimitsPerDay: { quiz: 2, explain: 2, example: 2, expand: 2, generate: 2, connect: 2 },
     mindMapNodeCount: 5,
     features: ["basic-generation"],
   });
@@ -23,6 +24,8 @@ test("research plan allows unlimited generation", () => {
   const research = getPlanConfig("research");
   assert.equal(research.code, "research");
   assert.equal(research.maxGenerationsPerDay, Number.POSITIVE_INFINITY);
+  assert.equal(research.featureLimitsPerDay.quiz, Number.POSITIVE_INFINITY);
+  assert.equal(research.featureLimitsPerDay.example, Number.POSITIVE_INFINITY);
 });
 
 test("mind map node counts increase with plan tier", () => {
@@ -34,7 +37,7 @@ test("mind map node counts increase with plan tier", () => {
 test("usage checks enforce the free plan limit", () => {
   const allowed = isUsageAllowed({
     planCode: "free",
-    usageCount: 2,
+    usageCount: 1,
     limit: getPlanConfig("free").maxGenerationsPerDay,
   });
 
@@ -42,7 +45,7 @@ test("usage checks enforce the free plan limit", () => {
 
   const blocked = isUsageAllowed({
     planCode: "free",
-    usageCount: 3,
+    usageCount: 2,
     limit: getPlanConfig("free").maxGenerationsPerDay,
   });
 
