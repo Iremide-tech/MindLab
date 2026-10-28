@@ -8,6 +8,7 @@ export type PlanConfig = {
   code: PlanCode;
   name: string;
   maxGenerationsPerDay: number;
+  featureLimitsPerDay: Record<string, number>;
   mindMapNodeCount: number;
   features: string[];
 };
@@ -16,7 +17,8 @@ export const PLAN_CONFIG: Record<PlanCode, PlanConfig> = {
   free: {
     code: "free",
     name: "Free",
-    maxGenerationsPerDay: 3,
+    maxGenerationsPerDay: 2,
+    featureLimitsPerDay: { quiz: 2, explain: 2, example: 2, expand: 2, generate: 2, connect: 2 },
     mindMapNodeCount: 5,
     features: ["basic-generation"],
   },
@@ -24,6 +26,7 @@ export const PLAN_CONFIG: Record<PlanCode, PlanConfig> = {
     code: "student",
     name: "Student",
     maxGenerationsPerDay: 25,
+    featureLimitsPerDay: { quiz: 25, explain: 25, example: 25, expand: 25, generate: 25, connect: 25 },
     mindMapNodeCount: 8,
     features: ["priority-generation", "concept-exploration"],
   },
@@ -31,6 +34,7 @@ export const PLAN_CONFIG: Record<PlanCode, PlanConfig> = {
     code: "research",
     name: "Research",
     maxGenerationsPerDay: Number.POSITIVE_INFINITY,
+    featureLimitsPerDay: { quiz: Number.POSITIVE_INFINITY, explain: Number.POSITIVE_INFINITY, example: Number.POSITIVE_INFINITY, expand: Number.POSITIVE_INFINITY, generate: Number.POSITIVE_INFINITY, connect: Number.POSITIVE_INFINITY },
     mindMapNodeCount: 10,
     features: ["unlimited-generation", "advanced-reasoning"],
   },
@@ -246,16 +250,17 @@ export async function enforceFeatureLimit({
 }> {
   const state = await getPlanState({ userId, request });
   const usageCount = await getUsageCountForFeature({ userId, feature });
+  const featureLimit = getPlanConfig(state.planCode).featureLimitsPerDay[feature] ?? state.limit;
   const allowed = isUsageAllowed({
     planCode: state.planCode,
     usageCount,
-    limit: state.limit,
+    limit: featureLimit,
   });
 
   return {
     allowed,
     planCode: state.planCode,
-    limit: state.limit,
+    limit: featureLimit,
     usageCount,
     message: allowed
       ? undefined

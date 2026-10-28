@@ -33,25 +33,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const access = await enforceFeatureLimit({
-      userId: user.id,
-      feature: "explain",
-      request,
-    });
-
-    if (!access.allowed) {
-      return NextResponse.json(
-        {
-          error:
-            access.message ??
-            `You have reached the ${getPlanConfig(
-              access.planCode
-            ).name.toLowerCase()} plan limit for today. Upgrade to continue.`,
-        },
-        { status: 403 }
-      );
-    }
-
     const parsed = await parseAiRequest(request);
 
     if (!parsed.success) {
@@ -78,6 +59,26 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Invalid explanation mode." },
         { status: 400 }
+      );
+    }
+
+    const feature = mode === "example" ? "example" : "explain";
+    const access = await enforceFeatureLimit({
+      userId: user.id,
+      feature,
+      request,
+    });
+
+    if (!access.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            access.message ??
+            `You have reached the ${getPlanConfig(
+              access.planCode
+            ).name.toLowerCase()} plan limit for today. Upgrade to continue.`,
+        },
+        { status: 403 }
       );
     }
 
@@ -156,7 +157,7 @@ Rules:
 
     await recordFeatureUsage({
       userId: user.id,
-      feature: "explain",
+      feature,
     });
 
     return NextResponse.json({ explanation });

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -47,6 +48,7 @@ type SavedResearchMap = {
 const supabase = createClient();
 
 export default function Home() {
+  const router = useRouter();
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -91,6 +93,8 @@ const [mapTitle, setMapTitle] = useState("Untitled research map");
 
 const [savedMaps, setSavedMaps] = useState<SavedResearchMap[]>([]);
 const [loadingMaps, setLoadingMaps] = useState(false);
+const [deletingMapId, setDeletingMapId] = useState<string | null>(null);
+const [mapDeleteMessage, setMapDeleteMessage] = useState<string | null>(null);
 const [showSavedMaps, setShowSavedMaps] = useState(false);
 const [currentMapId, setCurrentMapId] = useState<string | null>(null);
 const [currentMapOwnerId, setCurrentMapOwnerId] = useState<string | null>(null);
@@ -112,7 +116,7 @@ useEffect(() => {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      window.location.href = "/login";
+      router.replace("/login");
       return;
     }
 
@@ -145,7 +149,7 @@ useEffect(() => {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((_event, session) => {
     if (!session?.user) {
-      window.location.href = "/login";
+      router.replace("/login");
       return;
     }
 
@@ -156,7 +160,7 @@ useEffect(() => {
   return () => {
     subscription.unsubscribe();
   };
-}, []);
+}, [router, setEdges, setNodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -758,7 +762,7 @@ async function handleLogout() {
     return;
   }
 
-  window.location.href = "/login";
+  router.replace("/login");
 }
 
 
@@ -842,6 +846,58 @@ function openSavedMap(map: SavedResearchMap) {
   setShowSavedMaps(false);
   setSelectedNode(null);
 }
+async function deleteSavedMap(map: SavedResearchMap) {
+  if (!currentUserId || map.user_id !== currentUserId) {
+    setMapDeleteMessage("Only the owner can delete this saved map.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Delete "${map.title || "Untitled research map"}"? This cannot be undone.`
+  );
+  if (!confirmed) return;
+
+  setDeletingMapId(map.id);
+  setMapDeleteMessage(null);
+
+  try {
+    const { data, error } = await supabase
+      .from("research_maps")
+      .delete()
+      .eq("id", map.id)
+      .eq("user_id", currentUserId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      throw new Error("Map could not be deleted. You may not have permission to delete it.");
+    }
+
+    setSavedMaps((current) => current.filter((item) => item.id !== map.id));
+
+    if (currentMapId === map.id) {
+      setCurrentMapId(null);
+      setCurrentMapOwnerId(null);
+      setNodes([]);
+      setEdges([]);
+      setMapTitle("Untitled research map");
+      setTopicCount(0);
+      setSelectedNode(null);
+      setSaveMessage("Saved map deleted.");
+    }
+
+    setMapDeleteMessage("Map deleted.");
+  } catch (error) {
+    console.error("Failed to delete saved map:", error);
+    setMapDeleteMessage(
+      error instanceof Error ? error.message : "Could not delete this map."
+    );
+  } finally {
+    setDeletingMapId(null);
+  }
+}
+
 async function loadSavedMaps() {
   setLoadingMaps(true);
 
@@ -1218,6 +1274,12 @@ return (
       </button>
     </div>
 
+    {mapDeleteMessage && (
+      <p role="status" className="mb-3 text-xs text-white/60">
+        {mapDeleteMessage}
+      </p>
+    )}
+
     {loadingMaps ? (
       <p className="text-sm text-white/50">
         Loading maps...
@@ -1229,20 +1291,37 @@ return (
     ) : (
       <div className="space-y-2">
         {savedMaps.map((map) => (
-          <button
+          <div
             key={map.id}
-            type="button"
-            onClick={() => openSavedMap(map)}
-            className="block w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-lab-lime/10"
+            className="flex items-stretch gap-2 rounded-xl border border-white/10 bg-white/5 p-2 transition hover:bg-white/[0.07]"
           >
-            <p className="text-sm font-medium text-white">
-              {map.title}
-            </p>
+            <button
+              type="button"
+              onClick={() => openSavedMap(map)}
+              className="min-w-0 flex-1 rounded-lg p-1 text-left"
+            >
+              <p className="break-words text-sm font-medium text-white">
+                {map.title || "Untitled research map"}
+              </p>
 
-            <p className="mt-1 text-xs text-white/40">
-              {new Date(map.created_at).toLocaleDateString()}
-            </p>
-          </button>
+              <p className="mt-1 text-xs text-white/40">
+                {new Date(map.created_at).toLocaleDateString()}
+              </p>
+            </button>
+
+            {map.user_id === currentUserId && (
+              <button
+                type="button"
+                onClick={() => void deleteSavedMap(map)}
+                disabled={deletingMapId === map.id}
+                aria-label={`Delete ${map.title || "saved map"}`}
+                title="Delete saved map"
+                className="shrink-0 self-center rounded-lg border border-red-400/20 px-3 py-2 text-xs text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingMapId === map.id ? "Deleting..." : "Delete"}
+              </button>
+            )}
+          </div>
         ))}
       </div>
     )}
