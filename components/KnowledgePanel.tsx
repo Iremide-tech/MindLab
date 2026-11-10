@@ -20,9 +20,12 @@ export default function KnowledgePanel({
   expanding,
 }: KnowledgePanelProps) {
   const [loading, setLoading] = useState(false);
-
   const [explanation, setExplanation] =
     useState<string | null>(null);
+  const [explanationNodeId, setExplanationNodeId] = useState<string | null>(null);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+  const [explanationErrorNodeId, setExplanationErrorNodeId] = useState<string | null>(null);
+  const [explanationNeedsUpgrade, setExplanationNeedsUpgrade] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<(number | null)[]>([]);
   const [checkedQuestions, setCheckedQuestions] = useState<boolean[]>([]);
@@ -42,6 +45,10 @@ const [exampleError, setExampleError] = useState<string | null>(null);
   async function explainSimpler() {
     setLoading(true);
     setExplanation(null);
+    setExplanationNodeId(null);
+    setExplanationError(null);
+    setExplanationErrorNodeId(null);
+    setExplanationNeedsUpgrade(false);
 
     try {
       const response = await fetch("/api/explain", {
@@ -52,19 +59,34 @@ const [exampleError, setExampleError] = useState<string | null>(null);
         body: JSON.stringify({
           label: selectedNode.label,
           description: selectedNode.description,
+          mode: "simpler",
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+        explanation?: string;
+      } | null;
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to explain concept.");
+        setExplanationNeedsUpgrade(response.status === 403);
+        throw new Error(data?.error || "Failed to explain concept.");
+      }
+
+      if (!data?.explanation?.trim()) {
+        throw new Error("The explanation was empty. Please try again.");
       }
 
       setExplanation(data.explanation);
+      setExplanationNodeId(selectedNode.id);
     } catch (error) {
       console.error("Explain error:", error);
-      setExplanation("I couldn't explain this concept right now.");
+      setExplanationError(
+        error instanceof Error
+          ? error.message
+          : "I couldn't explain this concept right now."
+      );
+      setExplanationErrorNodeId(selectedNode.id);
     } finally {
       setLoading(false);
     }
@@ -171,7 +193,7 @@ const [exampleError, setExampleError] = useState<string | null>(null);
     : 0;
 
   return (
-    <aside className="absolute bottom-2 left-2 right-2 top-auto z-30 max-h-[55dvh] overflow-y-auto rounded-xl border border-white/10 bg-lab-surface/95 p-4 text-white shadow-2xl backdrop-blur-xl sm:p-5 md:bottom-auto md:left-auto md:right-5 md:top-24 md:max-h-[calc(100dvh-7rem)] md:w-80">
+    <aside className="absolute bottom-3 left-3 right-3 top-auto z-30 max-h-[52dvh] overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface/95 p-4 text-white shadow-2xl backdrop-blur-xl sm:bottom-5 sm:p-5 md:bottom-auto md:left-auto md:right-5 md:top-56 md:max-h-[calc(100dvh-15rem)] md:w-[22rem] 2xl:top-24 2xl:max-h-[calc(100dvh-7rem)]">
 
       {/* Header */}
 
@@ -182,14 +204,14 @@ const [exampleError, setExampleError] = useState<string | null>(null);
             Concept
           </p>
 
-          <h2 className="text-xl font-bold">
+          <h2 className="break-words text-xl font-bold tracking-[-0.02em]">
             {node.label}
           </h2>
         </div>
 
         <button
           onClick={onClose}
-          className="rounded-lg px-2 py-1 text-white/40 transition hover:bg-white/10 hover:text-white"
+          className="rounded-lg px-2 py-1 text-white/40 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lab-lime"
         >
           ✕
         </button>
@@ -209,7 +231,7 @@ const [exampleError, setExampleError] = useState<string | null>(null);
 
       {/* AI Explanation */}
 
-      {explanation && (
+      {explanation && explanationNodeId === selectedNode.id && (
         <div className="mb-5 rounded-xl border border-lab-lime/20 bg-lab-lime/10 p-4">
 
           <div className="mb-2 flex items-center gap-2">
@@ -230,6 +252,17 @@ const [exampleError, setExampleError] = useState<string | null>(null);
 
         </div>
       )}
+
+      {explanationError && explanationErrorNodeId === selectedNode.id ? (
+        <p role="alert" className="mb-4 text-sm text-red-300">
+          {explanationError}{" "}
+          {explanationNeedsUpgrade ? (
+            <Link href="/pricing" className="font-medium text-lab-lime underline underline-offset-2">
+              View plans
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
 
       {example && (
   <div className="mb-5 rounded-xl border border-white/10 bg-white/5 p-4">

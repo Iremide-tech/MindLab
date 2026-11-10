@@ -47,7 +47,7 @@ export default function BillingSummary() {
         : `${Math.max(0, billing.dailyLimit - billing.usageCount)} of ${billing.dailyLimit} left today`;
 
   return (
-    <div className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 sm:gap-3 sm:px-3">
+    <div className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 sm:gap-3 sm:px-3">
       <div className="min-w-0">
         <p className="truncate text-[11px] font-semibold text-white sm:text-xs">
           {billing.planName} plan

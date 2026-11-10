@@ -56,10 +56,10 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface/90 p-8 shadow-2xl">
+    <main className="flex min-h-screen items-center justify-center bg-background bg-[radial-gradient(ellipse_at_top,rgba(200,241,105,0.09),transparent_52%)] px-4 py-8 font-sans text-foreground sm:px-6 sm:py-12">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface/90 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold">
+          <h1 className="text-3xl font-bold tracking-[-0.03em]">
             MindMap<span className="text-lab-lime">AI</span>
           </h1>
 

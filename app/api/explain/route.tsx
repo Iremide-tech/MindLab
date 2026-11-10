@@ -18,6 +18,20 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+function endsWithCompleteSentence(text: string) {
+  return /[.!?]["')\]]?\s*$/.test(text.trim());
+}
+
+function removeIncompleteTrailingSentence(text: string) {
+  const lastStop = Math.max(
+    text.lastIndexOf("."),
+    text.lastIndexOf("!"),
+    text.lastIndexOf("?")
+  );
+
+  return lastStop >= 0 ? text.slice(0, lastStop + 1).trim() : text.trim();
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -138,7 +152,9 @@ Rules:
 - Avoid unnecessary jargon.
 - Use a short analogy when useful.
 - Do not oversimplify to the point of becoming inaccurate.
-- Keep the response under 150 words.
+- Write one self-contained explanation of 80–120 words.
+- Every sentence must be complete. End the response after a completed sentence,
+  with a period, question mark, or exclamation mark.
 `;
 
     const response = await ai.interactions.create({
@@ -149,10 +165,33 @@ Rules:
       ),
     });
 
-    const explanation = response.output_text;
+    let explanation = response.output_text?.trim();
 
-    if (!explanation?.trim()) {
+    if (!explanation) {
       throw new Error("The AI returned an empty explanation.");
+    }
+
+    // A response can occasionally stop at the output-token boundary. A cleanup
+    // retry is useful, but its failure must not discard an otherwise usable
+    // explanation.
+    if (mode !== "example" && !endsWithCompleteSentence(explanation)) {
+      try {
+        const retry = await ai.interactions.create({
+          model: "gemini-3.8-flash",
+          input: `Rewrite this explanation as one self-contained 80–120 word response for a curious student. Use only complete sentences and end with punctuation. Do not mention that you are rewriting it.\n\n${explanation}`,
+          generation_config: getGenerationConfig(AI_GENERATION_LIMITS.explain),
+        });
+        const revisedExplanation = retry.output_text?.trim();
+
+        if (revisedExplanation && endsWithCompleteSentence(revisedExplanation)) {
+          explanation = revisedExplanation;
+        } else {
+          explanation = removeIncompleteTrailingSentence(explanation);
+        }
+      } catch (retryError) {
+        console.warn("Explanation cleanup retry failed:", retryError);
+        explanation = removeIncompleteTrailingSentence(explanation);
+      }
     }
 
     await recordFeatureUsage({
