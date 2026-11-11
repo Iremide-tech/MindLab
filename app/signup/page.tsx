@@ -60,7 +60,7 @@ export default function SignupPage() {
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface/90 p-8 shadow-2xl">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold">
-            MindMap<span className="text-lab-lime">AI</span>
+            MindLab<span className="text-lab-lime">AI</span>
           </h1>
 
           <p className="mt-2 text-sm text-white/50">
