@@ -44,7 +44,7 @@ export const metadata: Metadata = {
       "Explore ideas, connect concepts, and build knowledge with MindLab AI.",
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "MindLab AI – AI-Powered Research & Knowledge Mapping",
     description:
       "Explore ideas, connect concepts, and build knowledge with MindLab AI.",
