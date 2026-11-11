@@ -7,14 +7,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: ["/", "/pricing"],
-      disallow: [
-        "/api/",
-        "/auth/",
-        "/dashboard",
-        "/login",
-        "/signup",
-        "/invite/",
-      ],
+      // Keep these crawlable so search engines can read their noindex metadata.
+      disallow: ["/api/", "/auth/"],
     },
     sitemap: `${siteUrl}/sitemap.xml`,
     host: siteUrl,
