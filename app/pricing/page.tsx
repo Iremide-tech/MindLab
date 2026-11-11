@@ -1,6 +1,25 @@
+import type { Metadata } from "next";
 import CheckoutConfirmation from "@/components/CheckoutConfirmation";
 import PricingAction from "@/components/PricingAction";
 import type { PlanCode } from "@/lib/paywall";
+
+export const metadata: Metadata = {
+  title: "Pricing",
+  description:
+    "Compare MindLab plans. Start free and upgrade for deeper AI-powered learning, concept exploration, and research workflows.",
+  alternates: { canonical: "/pricing" },
+  openGraph: {
+    title: "MindLab AI Pricing",
+    description:
+      "Compare plans for AI-powered learning, concept mapping, and research.",
+    url: "/pricing",
+  },
+  twitter: {
+    card: "summary",
+    title: "MindLab AI Pricing",
+    description: "Find the right MindLab plan for your research workflow.",
+  },
+};
 
 const plans = [
   {
