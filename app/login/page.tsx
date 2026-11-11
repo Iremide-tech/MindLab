@@ -1,12 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getSafePostAuthPath } from "@/lib/invitations/redirect";
-
-const supabase = createClient();
 
 export default function LoginPage() {
   return (
@@ -17,6 +15,14 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const getSupabase = () => {
+    if (!supabaseRef.current) {
+      supabaseRef.current = createClient();
+    }
+    return supabaseRef.current;
+  };
+
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -39,7 +45,7 @@ function LoginForm() {
   const visibleError = error ?? (callbackErrorDismissed ? null : callbackErrorMessage);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = getSupabase().auth.onAuthStateChange(
       (event) => {
         if (event === "PASSWORD_RECOVERY") {
           setRecoveringPassword(true);
@@ -62,7 +68,7 @@ function LoginForm() {
     setError(null);
     setMessage(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error } = await getSupabase().auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
@@ -96,7 +102,7 @@ function LoginForm() {
     setError(null);
     setMessage(null);
 
-    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+    const { error } = await getSupabase().auth.resetPasswordForEmail(trimmedEmail, {
       redirectTo: `${window.location.origin}/login`,
     });
 
@@ -122,7 +128,7 @@ function LoginForm() {
     setError(null);
     setMessage(null);
 
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await getSupabase().auth.updateUser({ password: newPassword });
 
     if (error) {
       setError("We couldn’t update your password. Please try again.");
