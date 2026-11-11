@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,13 @@ import { getSafePostAuthPath } from "@/lib/invitations/redirect";
 
 export default function SignupPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const getSupabase = () => {
+    if (!supabaseRef.current) {
+      supabaseRef.current = createClient();
+    }
+    return supabaseRef.current;
+  };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +38,7 @@ export default function SignupPage() {
     const callbackUrl = new URL("/auth/callback", window.location.origin);
     callbackUrl.searchParams.set("redirect", returnPath);
 
-    const { error } = await supabase.auth.signUp({
+    const { error } = await getSupabase().auth.signUp({
       email: email.trim().toLowerCase(),
       password,
       options: {
@@ -60,7 +66,7 @@ export default function SignupPage() {
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface/90 p-8 shadow-2xl">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold">
-            MindMap<span className="text-lab-lime">AI</span>
+            MindLab<span className="text-lab-lime">AI</span>
           </h1>
 
           <p className="mt-2 text-sm text-white/50">
