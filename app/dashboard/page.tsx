@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   addEdge,
@@ -44,9 +44,16 @@ type SavedResearchMap = {
   created_at: string;
 };
 
-const supabase = createClient();
-
 export default function Home() {
+  // Create the browser client only when the page runs in the browser.
+  // This avoids requiring public Supabase env vars during static prerendering.
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const getSupabase = () => {
+    if (!supabaseRef.current) {
+      supabaseRef.current = createClient();
+    }
+    return supabaseRef.current;
+  };
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -106,10 +113,11 @@ const [loadingCollaborators, setLoadingCollaborators] = useState(false);
 
    
 useEffect(() => {
+  const supabase = getSupabase();
   const loadUser = async () => {
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await getSupabase().auth.getUser();
 
     if (!user) {
       window.location.href = "/login";
@@ -121,7 +129,7 @@ useEffect(() => {
 
     const requestedMapId = new URLSearchParams(window.location.search).get("map");
     if (requestedMapId) {
-      const { data: requestedMap, error } = await supabase
+      const { data: requestedMap, error } = await getSupabase()
         .from("research_maps")
         .select("id, user_id, title, nodes, edges")
         .eq("id", requestedMapId)
@@ -143,7 +151,7 @@ useEffect(() => {
 
   const {
     data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
+  } = getSupabase().auth.onAuthStateChange((_event, session) => {
     if (!session?.user) {
       window.location.href = "/login";
       return;
@@ -751,7 +759,7 @@ const startAngle =
 
  
 async function handleLogout() {
-  const { error } = await supabase.auth.signOut();
+  const { error } = await getSupabase().auth.signOut();
 
   if (error) {
     console.error("Logout failed:", error.message);
@@ -775,7 +783,7 @@ async function saveCurrentMap() {
   try {
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await getSupabase().auth.getUser();
 
     if (!user) {
       setSaveMessage("Please log in again.");
@@ -790,7 +798,7 @@ async function saveCurrentMap() {
 
     if (currentMapId) {
       // Update the existing workspace instead of creating a duplicate.
-      const { error } = await supabase
+      const { error } = await getSupabase()
         .from("research_maps")
         .update(mapData)
         .eq("id", currentMapId);
@@ -800,7 +808,7 @@ async function saveCurrentMap() {
       setSaveMessage("Workspace updated successfully.");
     } else {
       // Only create a database row for a brand-new workspace.
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("research_maps")
         .insert({
           user_id: user.id,
@@ -847,14 +855,14 @@ async function loadSavedMaps() {
 
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await getSupabase().auth.getUser();
 
   if (!user) {
     setLoadingMaps(false);
     return;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("research_maps")
     .select("*")
     .order("created_at", { ascending: false });
