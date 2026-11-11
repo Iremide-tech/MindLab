@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,13 @@ import { getSafePostAuthPath } from "@/lib/invitations/redirect";
 
 export default function SignupPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const getSupabase = () => {
+    if (!supabaseRef.current) {
+      supabaseRef.current = createClient();
+    }
+    return supabaseRef.current;
+  };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +38,7 @@ export default function SignupPage() {
     const callbackUrl = new URL("/auth/callback", window.location.origin);
     callbackUrl.searchParams.set("redirect", returnPath);
 
-    const { error } = await supabase.auth.signUp({
+    const { error } = await getSupabase().auth.signUp({
       email: email.trim().toLowerCase(),
       password,
       options: {
