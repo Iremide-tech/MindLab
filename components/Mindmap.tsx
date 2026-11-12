@@ -36,7 +36,7 @@ export default function MindMap({
   onNodeClick,
 }: MindMapProps) {
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full bg-[radial-gradient(ellipse_at_center,rgba(200,241,105,0.045),transparent_62%)]">
   <ReactFlow
   nodes={nodes}
   edges={edges}
@@ -49,16 +49,16 @@ export default function MindMap({
   variant={BackgroundVariant.Dots}
   gap={24}
   size={1}
-  color="#526448"
+  color="#44533d"
 />
        <Controls
-  className="border-white/10! bg-lab-surface/80! shadow-xl!"
+  className="border-white/10! bg-lab-surface/90! shadow-xl! backdrop-blur!"
 />
 
         <MiniMap
           nodeColor="#c8f169"
           maskColor="rgba(0, 0, 0, 0.75)"
-          style={{ width: 120, height: 80, right: 8, bottom: 8 }}
+          style={{ width: 120, height: 80, right: 12, bottom: 12 }}
         />
       </ReactFlow>
     </div>
