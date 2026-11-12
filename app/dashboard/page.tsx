@@ -1,7 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   addEdge,
@@ -44,24 +45,22 @@ type SavedResearchMap = {
   created_at: string;
 };
 
+let supabaseClient: ReturnType<typeof createClient> | null = null;
+
+function getSupabase() {
+  if (!supabaseClient) {
+    supabaseClient = createClient();
+  }
+
+  return supabaseClient;
+}
+
 export default function Home() {
-  // Create the browser client only when the page runs in the browser.
-  // This avoids requiring public Supabase env vars during static prerendering.
-  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
-  const getSupabase = () => {
-    if (!supabaseRef.current) {
-      supabaseRef.current = createClient();
-    }
-    return supabaseRef.current;
-  };
+  const router = useRouter();
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  // Keeps track of how many research topics have been added.
-  // Each topic gets its own area on the canvas.
-  const [topicCount, setTopicCount] = useState(0);
 
   const [nodes, setNodes, onNodesChange] =
     useNodesState<Node>([]);
@@ -98,9 +97,12 @@ const [mapTitle, setMapTitle] = useState("Untitled research map");
 
 const [savedMaps, setSavedMaps] = useState<SavedResearchMap[]>([]);
 const [loadingMaps, setLoadingMaps] = useState(false);
+const [deletingMapId, setDeletingMapId] = useState<string | null>(null);
+const [mapDeleteMessage, setMapDeleteMessage] = useState<string | null>(null);
 const [showSavedMaps, setShowSavedMaps] = useState(false);
 const [currentMapId, setCurrentMapId] = useState<string | null>(null);
 const [currentMapOwnerId, setCurrentMapOwnerId] = useState<string | null>(null);
+const [leavingMap, setLeavingMap] = useState(false);
 
 const [showShare, setShowShare] = useState(false);
 const [inviteEmail, setInviteEmail] = useState("");
@@ -113,14 +115,13 @@ const [loadingCollaborators, setLoadingCollaborators] = useState(false);
 
    
 useEffect(() => {
-  const supabase = getSupabase();
   const loadUser = async () => {
     const {
       data: { user },
     } = await getSupabase().auth.getUser();
 
     if (!user) {
-      window.location.href = "/login";
+      router.replace("/login");
       return;
     }
 
@@ -153,7 +154,7 @@ useEffect(() => {
     data: { subscription },
   } = getSupabase().auth.onAuthStateChange((_event, session) => {
     if (!session?.user) {
-      window.location.href = "/login";
+      router.replace("/login");
       return;
     }
 
@@ -164,7 +165,7 @@ useEffect(() => {
   return () => {
     subscription.unsubscribe();
   };
-}, []);
+}, [router, setEdges, setNodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -268,8 +269,17 @@ setMapTitle(submittedTopic);
     .replace(/^-|-$/g, "") ||
   `topic-${Date.now()}`;
 
-      // Save the current topic's position.
-      const currentTopicIndex = topicCount;
+      // Place each new topic to the right of the current canvas. Saved maps do
+      // not restore the transient topic counter, so deriving the position from
+      // the existing nodes prevents the first new topic from reusing (0, 450).
+      const rightmostNodeX = nodes.reduce(
+        (rightmost, existingNode) =>
+          Math.max(rightmost, existingNode.position.x),
+        Number.NEGATIVE_INFINITY
+      );
+      const centerX = Number.isFinite(rightmostNodeX)
+        ? rightmostNodeX + 620
+        : 0;
 
     
       const generatedNodes: Node[] =
@@ -282,9 +292,6 @@ setMapTitle(submittedTopic);
             },
             index: number
           ) => {
-            const centerX =
-              currentTopicIndex * 900;
-
             const centerY = 450;
 
             const isRoot = index === 0;
@@ -386,11 +393,6 @@ setMapTitle(submittedTopic);
         ...currentEdges,
         ...generatedEdges,
       ]);
-
-      // Move to the next topic region.
-      setTopicCount(
-        (current) => current + 1
-      );
 
       // Clear input
       setTopic("");
@@ -766,7 +768,7 @@ async function handleLogout() {
     return;
   }
 
-  window.location.href = "/login";
+  router.replace("/login");
 }
 
 
@@ -850,6 +852,89 @@ function openSavedMap(map: SavedResearchMap) {
   setShowSavedMaps(false);
   setSelectedNode(null);
 }
+async function deleteSavedMap(map: SavedResearchMap) {
+  if (!currentUserId || map.user_id !== currentUserId) {
+    setMapDeleteMessage("Only the owner can delete this saved map.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Delete "${map.title || "Untitled research map"}"? This cannot be undone.`
+  );
+  if (!confirmed) return;
+
+  setDeletingMapId(map.id);
+  setMapDeleteMessage(null);
+
+  try {
+    const { data, error } = await getSupabase()
+      .from("research_maps")
+      .delete()
+      .eq("id", map.id)
+      .eq("user_id", currentUserId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      throw new Error("Map could not be deleted. You may not have permission to delete it.");
+    }
+
+    setSavedMaps((current) => current.filter((item) => item.id !== map.id));
+
+    if (currentMapId === map.id) {
+      setCurrentMapId(null);
+      setCurrentMapOwnerId(null);
+      setNodes([]);
+      setEdges([]);
+      setMapTitle("Untitled research map");
+      setSelectedNode(null);
+      setSaveMessage("Saved map deleted.");
+    }
+
+    setMapDeleteMessage("Map deleted.");
+  } catch (error) {
+    console.error("Failed to delete saved map:", error);
+    setMapDeleteMessage(
+      error instanceof Error ? error.message : "Could not delete this map."
+    );
+  } finally {
+    setDeletingMapId(null);
+  }
+}
+
+async function leaveCurrentMap() {
+  if (!currentMapId || !currentUserId || currentMapOwnerId === currentUserId) return;
+
+  if (!window.confirm("Leave this shared map? You will no longer be able to access it.")) return;
+
+  setLeavingMap(true);
+  setSaveMessage(null);
+
+  try {
+    const response = await fetch("/api/maps/leave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mapId: currentMapId }),
+    });
+    const data = (await response.json().catch(() => null)) as { error?: string } | null;
+
+    if (!response.ok) throw new Error(data?.error ?? "Unable to leave this map.");
+
+    setCurrentMapId(null);
+    setCurrentMapOwnerId(null);
+    setNodes([]);
+    setEdges([]);
+    setMapTitle("Untitled research map");
+    setSelectedNode(null);
+    router.replace("/dashboard");
+  } catch (error) {
+    setSaveMessage(error instanceof Error ? error.message : "Unable to leave this map.");
+  } finally {
+    setLeavingMap(false);
+  }
+}
+
 async function loadSavedMaps() {
   setLoadingMaps(true);
 
@@ -971,23 +1056,23 @@ async function copyInvitationLink() {
 }
 
 return (
-  <main className="relative h-dvh w-full overflow-hidden bg-background text-foreground">
+  <main className="relative h-dvh w-full overflow-hidden bg-background font-sans text-foreground">
 
       {/* HEADER */}
 
-      <header className="absolute left-0 right-0 top-0 z-30 flex flex-col gap-2 border-b border-white/10 bg-background/90 px-3 py-2 backdrop-blur-xl sm:px-5 sm:py-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+      <header className="absolute left-0 right-0 top-0 z-30 flex flex-col gap-3 border-b border-white/10 bg-background/95 px-3 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.16)] backdrop-blur-xl sm:px-5 2xl:flex-row 2xl:items-center 2xl:justify-between">
 
         {/* Logo */}
 
-        <div className="flex items-center justify-between gap-2 2xl:block">
-          <h1 className="text-xl font-bold tracking-tight">
+        <div className="flex items-center justify-between gap-3 2xl:block">
+          <h1 className="text-xl font-bold tracking-[-0.03em]">
             MindLab
             <span className="text-lab-lime">
               AI
             </span>
           </h1>
 
-          <p className="text-xs text-white/40">
+          <p className="mt-0.5 text-xs text-white/40">
             Turn thoughts into knowledge
           </p>
 
@@ -1005,7 +1090,7 @@ return (
 
         {/* Controls */}
 
-        <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 2xl:w-auto 2xl:overflow-visible 2xl:pb-0">
+        <div className="flex w-full flex-wrap items-center gap-2 2xl:w-auto 2xl:flex-nowrap">
 
 
          {saveMessage && (
@@ -1017,7 +1102,7 @@ return (
 
           <form
             onSubmit={generateMindMap}
-            className="flex shrink-0 gap-2"
+            className="flex w-full gap-2 sm:w-auto"
           >
             <input
               value={topic}
@@ -1025,7 +1110,7 @@ return (
                 setTopic(e.target.value)
               }
               placeholder="Add a research topic..."
-              className="w-40 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-lab-lime/50 focus:bg-white/10 sm:w-56 sm:px-4 2xl:w-80"
+              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-lab-lime/50 focus:bg-white/10 sm:w-56 sm:flex-none sm:px-4 2xl:w-80"
             />
 
             <button
@@ -1090,6 +1175,17 @@ return (
   </button>
 )}
 
+{currentMapId && currentUserId && currentMapOwnerId !== currentUserId && (
+  <button
+    type="button"
+    onClick={() => void leaveCurrentMap()}
+    disabled={leavingMap}
+    className="min-h-10 shrink-0 whitespace-nowrap rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 2xl:px-5"
+  >
+    {leavingMap ? "Leaving..." : "Leave map"}
+  </button>
+)}
+
         </div>
         
 {userEmail && (
@@ -1114,7 +1210,7 @@ return (
       {/* CONNECTION MODE */}
 
       {connectMode && (
-        <div className="absolute left-1/2 top-[120px] z-40 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-lab-lime/20 bg-lab-surface/90 px-4 py-4 text-center shadow-2xl backdrop-blur-xl 2xl:top-24 sm:px-6">
+        <div className="absolute left-1/2 top-56 z-40 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-lab-lime/20 bg-lab-surface/95 px-4 py-4 text-center shadow-2xl backdrop-blur-xl sm:top-48 sm:px-6 2xl:top-24">
 
           <p className="text-sm text-white/70">
             Select two concepts
@@ -1213,7 +1309,7 @@ return (
 
       
 {showSavedMaps && (
-  <div className="absolute left-3 right-3 top-[120px] z-50 max-h-[calc(100dvh-9rem)] overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface/95 p-4 shadow-2xl backdrop-blur-xl sm:left-auto sm:right-6 sm:top-24 sm:w-80 sm:p-5">
+  <div className="absolute left-3 right-3 top-56 z-50 max-h-[calc(100dvh-15rem)] overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface/95 p-4 shadow-2xl backdrop-blur-xl sm:left-auto sm:right-6 sm:top-48 sm:max-h-[calc(100dvh-13rem)] sm:w-80 sm:p-5 2xl:top-24 2xl:max-h-[calc(100dvh-7rem)]">
     <div className="mb-4 flex items-center justify-between">
       <h2 className="font-semibold">Saved Maps</h2>
 
@@ -1226,6 +1322,12 @@ return (
       </button>
     </div>
 
+    {mapDeleteMessage && (
+      <p role="status" className="mb-3 text-xs text-white/60">
+        {mapDeleteMessage}
+      </p>
+    )}
+
     {loadingMaps ? (
       <p className="text-sm text-white/50">
         Loading maps...
@@ -1237,20 +1339,37 @@ return (
     ) : (
       <div className="space-y-2">
         {savedMaps.map((map) => (
-          <button
+          <div
             key={map.id}
-            type="button"
-            onClick={() => openSavedMap(map)}
-            className="block w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-lab-lime/10"
+            className="flex items-stretch gap-2 rounded-xl border border-white/10 bg-white/5 p-2 transition hover:bg-white/[0.07]"
           >
-            <p className="text-sm font-medium text-white">
-              {map.title}
-            </p>
+            <button
+              type="button"
+              onClick={() => openSavedMap(map)}
+              className="min-w-0 flex-1 rounded-lg p-1 text-left"
+            >
+              <p className="break-words text-sm font-medium text-white">
+                {map.title || "Untitled research map"}
+              </p>
 
-            <p className="mt-1 text-xs text-white/40">
-              {new Date(map.created_at).toLocaleDateString()}
-            </p>
-          </button>
+              <p className="mt-1 text-xs text-white/40">
+                {new Date(map.created_at).toLocaleDateString()}
+              </p>
+            </button>
+
+            {map.user_id === currentUserId && (
+              <button
+                type="button"
+                onClick={() => void deleteSavedMap(map)}
+                disabled={deletingMapId === map.id}
+                aria-label={`Delete ${map.title || "saved map"}`}
+                title="Delete saved map"
+                className="shrink-0 self-center rounded-lg border border-red-400/20 px-3 py-2 text-xs text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingMapId === map.id ? "Deleting..." : "Delete"}
+              </button>
+            )}
+          </div>
         ))}
       </div>
     )}
@@ -1384,7 +1503,7 @@ return (
 
       {/* CANVAS */}
 
-      <div className="h-full w-full pt-[116px] 2xl:pt-[73px]">
+      <div className="h-full w-full pt-56 sm:pt-48 2xl:pt-[73px]">
 
         <MindMap
           nodes={nodes}

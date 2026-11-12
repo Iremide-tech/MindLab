@@ -97,7 +97,7 @@ export default function InvitationPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
+      <main className="flex min-h-screen items-center justify-center bg-background bg-[radial-gradient(ellipse_at_top,rgba(200,241,105,0.09),transparent_52%)] px-4 font-sans text-foreground">
         <p className="text-white/60">
           Loading invitation...
         </p>
@@ -107,8 +107,8 @@ export default function InvitationPage() {
 
   if (!invitation) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-lab-surface p-8 text-center">
+      <main className="flex min-h-screen items-center justify-center bg-background bg-[radial-gradient(ellipse_at_top,rgba(200,241,105,0.09),transparent_52%)] px-4 py-8 font-sans text-foreground sm:px-6">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-lab-surface p-6 text-center shadow-2xl shadow-black/30 sm:p-8">
           <h1 className="text-2xl font-semibold">
             Invitation unavailable
           </h1>
@@ -123,14 +123,14 @@ export default function InvitationPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface p-8 shadow-2xl">
+    <main className="flex min-h-screen items-center justify-center bg-background bg-[radial-gradient(ellipse_at_top,rgba(200,241,105,0.09),transparent_52%)] px-4 py-8 font-sans text-foreground sm:px-6 sm:py-12">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface p-6 shadow-2xl shadow-black/30 sm:p-8">
         <div className="mb-6">
           <div className="text-sm text-lab-lime">
             MINDLAB
           </div>
 
-          <h1 className="mt-3 text-3xl font-semibold">
+          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em]">
             You&apos;ve been invited
           </h1>
 

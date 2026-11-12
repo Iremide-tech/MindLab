@@ -56,7 +56,16 @@ export async function sendInvitationEmail(invitation: InvitationEmail) {
     }),
   });
 
-  if (!response.ok) {
-    throw new Error(`Email provider rejected the invitation (HTTP ${response.status}).`);
-  }
+if (!response.ok) {
+  const errorBody = await response.text();
+
+  console.error("Resend API error:", {
+    status: response.status,
+    response: errorBody.slice(0, 1000),
+  });
+
+  throw new Error(
+    `Email provider rejected the invitation (HTTP ${response.status}).`
+  );
+}
 }
