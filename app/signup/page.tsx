@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSafePostAuthPath } from "@/lib/invitations/redirect";
+import { getAuthCallbackUrl } from "@/lib/site-url";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -36,14 +37,14 @@ export default function SignupPage() {
       const returnPath = getSafePostAuthPath(
         new URLSearchParams(window.location.search).get("redirect")
       );
-      const callbackUrl = new URL("/auth/callback", window.location.origin);
-      callbackUrl.searchParams.set("redirect", returnPath);
+      // Prefer production site URL so confirmation emails never point at localhost.
+      const callbackUrl = getAuthCallbackUrl(returnPath, window.location.origin);
 
       const { error } = await getSupabase().auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: {
-          emailRedirectTo: callbackUrl.toString(),
+          emailRedirectTo: callbackUrl,
         },
       });
 

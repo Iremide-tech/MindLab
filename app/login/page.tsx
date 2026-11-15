@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getSafePostAuthPath } from "@/lib/invitations/redirect";
+import { getSiteUrl } from "@/lib/site-url";
 
 export default function LoginPage() {
   return (
@@ -102,8 +103,10 @@ function LoginForm() {
     setError(null);
     setMessage(null);
 
+    const redirectTo = `${getSiteUrl(window.location.origin)}/login`;
+
     const { error } = await getSupabase().auth.resetPasswordForEmail(trimmedEmail, {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo,
     });
 
     if (error) {

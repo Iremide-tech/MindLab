@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { sendInvitationEmail } from "@/lib/invitations/email";
+import { getSiteUrl } from "@/lib/site-url";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const emailPattern = /^[^@\s]+@[^@\s]+(\.[^@\s]+)+$/;
@@ -106,15 +107,13 @@ export async function POST(request: Request) {
     if (role !== "collaborator") return errorResponse("invalid_role");
     if (!user.email) return NextResponse.json({ error: "Your account needs a verified email address." }, { status: 400 });
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
     let siteOrigin: string;
     try {
-      if (!siteUrl) throw new Error("Missing site URL");
-      const parsedSiteUrl = new URL(siteUrl);
+      siteOrigin = getSiteUrl(new URL(request.url).origin);
+      const parsedSiteUrl = new URL(siteOrigin);
       if (parsedSiteUrl.protocol !== "https:" && parsedSiteUrl.hostname !== "localhost") {
         throw new Error("Site URL must use HTTPS.");
       }
-      siteOrigin = parsedSiteUrl.origin;
     } catch {
       return NextResponse.json({ error: "The site URL is not configured correctly." }, { status: 500 });
     }
