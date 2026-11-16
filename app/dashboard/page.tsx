@@ -1056,25 +1056,27 @@ async function copyInvitationLink() {
 }
 
 return (
-  <main className="relative h-dvh w-full overflow-hidden bg-background font-sans text-foreground">
+  <main className="relative flex h-dvh w-full flex-col overflow-hidden bg-background font-sans text-foreground">
 
       {/* HEADER */}
 
-      <header className="absolute left-0 right-0 top-0 z-30 flex flex-col gap-3 border-b border-white/10 bg-background/95 px-3 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.16)] backdrop-blur-xl sm:px-5 2xl:flex-row 2xl:items-center 2xl:justify-between">
+      <header className="relative z-30 flex shrink-0 flex-col gap-3 border-b border-white/10 bg-background/95 px-3 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.16)] backdrop-blur-xl sm:px-5 2xl:flex-row 2xl:items-center 2xl:justify-between">
 
         {/* Logo */}
 
         <div className="flex items-center justify-between gap-3 2xl:block">
-          <h1 className="text-xl font-bold tracking-[-0.03em]">
-            MindLab
-            <span className="text-lab-lime">
-              AI
-            </span>
-          </h1>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-[-0.03em]">
+              MindLab
+              <span className="text-lab-lime">
+                AI
+              </span>
+            </h1>
 
-          <p className="mt-0.5 text-xs text-white/40">
-            Turn thoughts into knowledge
-          </p>
+            <p className="mt-0.5 text-xs text-white/40">
+              Turn thoughts into knowledge
+            </p>
+          </div>
 
           <div className="flex shrink-0 items-center gap-2 2xl:hidden">
             <BillingSummary />
@@ -1090,7 +1092,7 @@ return (
 
         {/* Controls */}
 
-        <div className="flex w-full flex-wrap items-center gap-2 2xl:w-auto 2xl:flex-nowrap">
+        <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap 2xl:w-auto 2xl:flex-nowrap">
 
 
          {saveMessage && (
@@ -1102,7 +1104,7 @@ return (
 
           <form
             onSubmit={generateMindMap}
-            className="flex w-full gap-2 sm:w-auto"
+            className="col-span-2 flex w-full gap-2 sm:col-span-1 sm:w-auto"
           >
             <input
               value={topic}
@@ -1210,7 +1212,7 @@ return (
       {/* CONNECTION MODE */}
 
       {connectMode && (
-        <div className="absolute left-1/2 top-56 z-40 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-lab-lime/20 bg-lab-surface/95 px-4 py-4 text-center shadow-2xl backdrop-blur-xl sm:top-48 sm:px-6 2xl:top-24">
+        <div className="fixed bottom-24 left-3 right-3 z-40 rounded-2xl border border-lab-lime/20 bg-lab-surface/95 px-4 py-4 text-center shadow-2xl backdrop-blur-xl sm:bottom-5 sm:left-1/2 sm:right-auto sm:w-[min(24rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:px-6 2xl:bottom-auto 2xl:top-24">
 
           <p className="text-sm text-white/70">
             Select two concepts
@@ -1309,7 +1311,7 @@ return (
 
       
 {showSavedMaps && (
-  <div className="absolute left-3 right-3 top-56 z-50 max-h-[calc(100dvh-15rem)] overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface/95 p-4 shadow-2xl backdrop-blur-xl sm:left-auto sm:right-6 sm:top-48 sm:max-h-[calc(100dvh-13rem)] sm:w-80 sm:p-5 2xl:top-24 2xl:max-h-[calc(100dvh-7rem)]">
+  <div className="fixed bottom-3 left-3 right-3 z-50 max-h-[60dvh] overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface/95 p-4 shadow-2xl backdrop-blur-xl sm:bottom-5 sm:left-auto sm:right-6 sm:top-48 sm:max-h-[calc(100dvh-13rem)] sm:w-80 sm:p-5 2xl:top-24 2xl:max-h-[calc(100dvh-7rem)]">
     <div className="mb-4 flex items-center justify-between">
       <h2 className="font-semibold">Saved Maps</h2>
 
@@ -1503,7 +1505,7 @@ return (
 
       {/* CANVAS */}
 
-      <div className="h-full w-full pt-56 sm:pt-48 2xl:pt-[73px]">
+      <div className="min-h-0 w-full flex-1">
 
         <MindMap
           nodes={nodes}
