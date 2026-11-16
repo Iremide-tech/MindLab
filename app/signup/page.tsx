@@ -36,7 +36,9 @@ export default function SignupPage() {
       const returnPath = getSafePostAuthPath(
         new URLSearchParams(window.location.search).get("redirect")
       );
-      const callbackUrl = new URL("/auth/callback", window.location.origin);
+      const siteOrigin =
+        process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const callbackUrl = new URL("/auth/callback", siteOrigin);
       callbackUrl.searchParams.set("redirect", returnPath);
 
       const { error } = await getSupabase().auth.signUp({

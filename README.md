@@ -33,6 +33,8 @@ Apply `supabase/migrations/20261004000000_gmail_identity_guard.sql` after the ex
 
 To enable Google sign-in, enable the Google provider in Supabase Auth and add the Supabase Auth callback URL shown in its provider settings to the Google Cloud OAuth client's authorized redirect URIs. Add both local and production app callback URLs (`http://localhost:3000/auth/callback` and `https://your-domain.example/auth/callback`) to Supabase Auth's redirect URL allow list. Keep Google client secrets in Supabase, not in browser code.
 
+Email confirmation links use `NEXT_PUBLIC_SITE_URL` as their callback origin. Set it to `http://localhost:3000` for local development and `https://usemindlab.com` in the production build environment. In Supabase Auth URL Configuration, set the production Site URL to `https://usemindlab.com` and allow both `http://localhost:3000/auth/callback` and `https://usemindlab.com/auth/callback` as redirect URLs.
+
 ## Stripe Billing
 
 Paid tiers use monthly USD Stripe subscriptions: Student at USD 12 and Research at USD 29. Create recurring monthly Stripe Prices for both plans. Configure test-mode keys and Price IDs locally, then use matching live-mode settings in production:
