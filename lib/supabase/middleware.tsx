@@ -39,17 +39,19 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   const isPublicRoute =
-  pathname === "/" ||
-  pathname === "/pricing" ||
-  pathname === "/robots.txt" ||
-  pathname === "/sitemap.xml" ||
-  pathname.startsWith("/login") ||
-  pathname.startsWith("/signup") ||
-  pathname.startsWith("/auth") ||
-  pathname.startsWith("/invite") ||
-  pathname === "/api/payments/webhook" ||
-  pathname.startsWith("/api/invitations/");
-  
+    pathname === "/" ||
+    pathname === "/pricing" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/invite") ||
+    pathname === "/api/payments/webhook" ||
+    pathname.startsWith("/api/invitations/");
+
   if (!user && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
