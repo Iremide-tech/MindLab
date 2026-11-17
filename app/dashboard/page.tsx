@@ -545,18 +545,25 @@ export default function Home() {
             aria-expanded={menuOpen}
           >
             <span
-              className={`block h-0.5 w-5 bg-white transition ${
-                menuOpen ? "translate-y-2 rotate-45" : ""
-              }`}
+              className={
+                menuOpen
+                  ? "block h-0.5 w-5 translate-y-2 rotate-45 bg-white transition"
+                  : "block h-0.5 w-5 bg-white transition"
+              }
             />
             <span
-              className={`block h-0.5 w-5 bg-white transition ${\n                menuOpen ? "opacity-0" : ""
-              }`}
+              className={
+                menuOpen
+                  ? "block h-0.5 w-5 bg-white opacity-0 transition"
+                  : "block h-0.5 w-5 bg-white transition"
+              }
             />
             <span
-              className={`block h-0.5 w-5 bg-white transition ${
-                menuOpen ? "-translate-y-2 -rotate-45" : ""
-              }`}
+              className={
+                menuOpen
+                  ? "block h-0.5 w-5 -translate-y-2 -rotate-45 bg-white transition"
+                  : "block h-0.5 w-5 bg-white transition"
+              }
             />
           </button>
         </div>
