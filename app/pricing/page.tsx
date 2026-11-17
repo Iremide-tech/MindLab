@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import CheckoutConfirmation from "@/components/CheckoutConfirmation";
 import PricingAction from "@/components/PricingAction";
 import type { PlanCode } from "@/lib/paywall";
@@ -117,6 +118,18 @@ export default async function PricingPage({
             </article>
           ))}
         </div>
+
+        <p className="mt-10 text-center text-xs text-white/40">
+          Subscriptions renew monthly until cancelled. See our{" "}
+          <Link href="/terms" className="text-lab-lime hover:underline">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="text-lab-lime hover:underline">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     </main>
   );
