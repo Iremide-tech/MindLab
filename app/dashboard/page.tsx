@@ -27,6 +27,18 @@ type SavedResearchMap = {
   created_at: string;
 };
 
+type ConnectionSuggestion = {
+  source: string;
+  target: string;
+  label: string;
+  explanation: string;
+};
+
+type ConnectionAnalysis = {
+  connections: ConnectionSuggestion[];
+  summary: string;
+};
+
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
   if (!supabaseClient) supabaseClient = createClient();
@@ -44,6 +56,9 @@ export default function Home() {
   const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [selectedForConnection, setSelectedForConnection] = useState<Node[]>([]);
+  const [connectionLoading, setConnectionLoading] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [connectionAnalysis, setConnectionAnalysis] = useState<ConnectionAnalysis | null>(null);
   const [expanding, setExpanding] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -114,15 +129,65 @@ export default function Home() {
     [setEdges]
   );
 
+  async function analyzeConnection(first: Node, second: Node) {
+    setConnectionLoading(true);
+    setConnectionError(null);
+    setConnectionAnalysis(null);
+    try {
+      const response = await fetch("/api/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topicA: {
+            id: first.id,
+            label: String(first.data.label ?? ""),
+            description: first.data.description ? String(first.data.description) : undefined,
+          },
+          topicB: {
+            id: second.id,
+            label: String(second.data.label ?? ""),
+            description: second.data.description ? String(second.data.description) : undefined,
+          },
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | (ConnectionAnalysis & { error?: string })
+        | null;
+      if (!response.ok) {
+        throw new Error(data?.error || "Could not analyse these topics. Please try again.");
+      }
+      if (!data || !Array.isArray(data.connections) || typeof data.summary !== "string") {
+        throw new Error("The AI returned an unexpected connection response.");
+      }
+      const validConnections = data.connections.filter(
+        (connection) =>
+          connection &&
+          connection.source === first.id &&
+          connection.target === second.id &&
+          typeof connection.label === "string" &&
+          typeof connection.explanation === "string"
+      );
+      setConnectionAnalysis({ connections: validConnections, summary: data.summary });
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : "Could not analyse these topics.");
+    } finally {
+      setConnectionLoading(false);
+    }
+  }
+
   function handleNodeClick(_: React.MouseEvent, node: Node) {
     if (connectMode) {
-      setSelectedForConnection((current) => {
-        if (current.some((item) => item.id === node.id)) {
-          return current.filter((item) => item.id !== node.id);
-        }
-        if (current.length >= 2) return current;
-        return [...current, node];
-      });
+      if (selectedForConnection.some((item) => item.id === node.id)) {
+        setSelectedForConnection((current) => current.filter((item) => item.id !== node.id));
+        return;
+      }
+      if (selectedForConnection.length >= 2 || connectionLoading) return;
+      const nextSelection = [...selectedForConnection, node];
+      setSelectedForConnection(nextSelection);
+      if (nextSelection.length === 2) {
+        setConnectMode(false);
+        void analyzeConnection(nextSelection[0], nextSelection[1]);
+      }
       return;
     }
     setSelectedNode({
@@ -130,6 +195,46 @@ export default function Home() {
       label: String(node.data.label),
       description: node.data.description ? String(node.data.description) : undefined,
     });
+  }
+
+  function addSuggestedConnection(connection: ConnectionSuggestion) {
+    const alreadyExists = edges.some(
+      (edge) =>
+        (edge.source === connection.source && edge.target === connection.target) ||
+        (edge.source === connection.target && edge.target === connection.source)
+    );
+    if (alreadyExists) {
+      setConnectionError("These topics are already connected in your map.");
+      return;
+    }
+    setEdges((current) => [
+      ...current,
+      {
+        id: `ai-connection-${connection.source}-${connection.target}-${Date.now()}`,
+        source: connection.source,
+        target: connection.target,
+        label: connection.label,
+        animated: true,
+        style: { stroke: "rgba(200, 241, 105, 0.8)", strokeWidth: 1.8 },
+        labelStyle: { fill: "#d9f99d", fontSize: 11 },
+      },
+    ]);
+    setConnectionAnalysis((current) =>
+      current
+        ? {
+            ...current,
+            connections: current.connections.filter(
+              (item) => item.source !== connection.source || item.target !== connection.target
+            ),
+          }
+        : current
+    );
+  }
+
+  function closeConnectionAnalysis() {
+    setConnectionAnalysis(null);
+    setConnectionError(null);
+    setSelectedForConnection([]);
   }
 
   async function generateMindMap(e?: FormEvent) {
@@ -687,6 +792,85 @@ export default function Home() {
           onNodeClick={handleNodeClick}
         />
       </div>
+
+      {connectMode ? (
+        <div className="absolute left-1/2 top-20 z-40 w-[min(92vw,420px)] -translate-x-1/2 rounded-xl border border-lab-lime/30 bg-lab-surface/95 px-4 py-3 text-center shadow-2xl backdrop-blur">
+          <p className="text-sm font-medium text-lab-lime-light">
+            Select two topics to explore their connection
+          </p>
+          <p className="mt-1 text-xs text-white/55">{selectedForConnection.length}/2 selected</p>
+          <button
+            type="button"
+            onClick={() => { setConnectMode(false); setSelectedForConnection([]); }}
+            className="mt-2 text-xs text-white/50 underline hover:text-white"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+
+      {connectionLoading || connectionError || connectionAnalysis ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" aria-labelledby="connection-analysis-title"
+            className="max-h-[80dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-lab-lime/20 bg-lab-surface p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-lab-lime">MindLab connection</p>
+                <h2 id="connection-analysis-title" className="mt-1 text-lg font-semibold">
+                  {connectionLoading ? "Exploring the relationship…" : "How these topics connect"}
+                </h2>
+                <p className="mt-1 text-xs text-white/45">
+                  {selectedForConnection.map((item) => String(item.data.label ?? "Topic")).join(" ↔ ")}
+                </p>
+              </div>
+              <button type="button" onClick={closeConnectionAnalysis}
+                className="rounded-lg px-2 py-1 text-white/50 hover:bg-white/10 hover:text-white"
+                aria-label="Close connection analysis">✕</button>
+            </div>
+            {connectionLoading ? (
+              <p className="py-8 text-center text-sm text-white/60">Gemini is analysing the two topics…</p>
+            ) : connectionError ? (
+              <div className="rounded-xl border border-red-400/20 bg-red-500/10 p-3">
+                <p className="text-sm text-red-200">{connectionError}</p>
+                <button type="button"
+                  onClick={() => { if (selectedForConnection.length === 2) void analyzeConnection(selectedForConnection[0], selectedForConnection[1]); }}
+                  className="mt-3 text-xs font-semibold text-white underline">Try again</button>
+              </div>
+            ) : connectionAnalysis ? (
+              <>
+                <p className="mb-4 text-sm leading-relaxed text-white/65">{connectionAnalysis.summary}</p>
+                {connectionAnalysis.connections.length === 0 ? (
+                  <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/55">
+                    No strong conceptual connection was found. Try choosing different topics.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {connectionAnalysis.connections.map((connection, index) => {
+                      const exists = edges.some((edge) =>
+                        (edge.source === connection.source && edge.target === connection.target) ||
+                        (edge.source === connection.target && edge.target === connection.source)
+                      );
+                      return (
+                        <article key={`${connection.source}-${connection.target}-${index}`}
+                          className="rounded-xl border border-white/10 bg-white/5 p-4">
+                          <h3 className="text-sm font-semibold text-lab-lime-light">{connection.label}</h3>
+                          <p className="mt-2 text-sm leading-relaxed text-white/65">{connection.explanation}</p>
+                          <button type="button" onClick={() => addSuggestedConnection(connection)} disabled={exists}
+                            className="mt-3 rounded-lg bg-lab-lime px-3 py-2 text-xs font-semibold text-lab-ink disabled:cursor-not-allowed disabled:opacity-40">
+                            {exists ? "Already in map" : "Add to map"}
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+                <button type="button" onClick={closeConnectionAnalysis}
+                  className="mt-5 w-full rounded-xl border border-white/10 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5">Done</button>
+              </>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
 
       <KnowledgePanel
         node={selectedNode}
