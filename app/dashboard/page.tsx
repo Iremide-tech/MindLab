@@ -17,6 +17,15 @@ import BillingSummary from "@/components/BillingSummary";
 import type { MindMapNode } from "@/lib/mindmap";
 import { createClient } from "@/lib/supabase/client";
 
+type SavedResearchMap = {
+  id: string;
+  user_id: string;
+  title: string;
+  nodes: Node[];
+  edges: Edge[];
+  created_at: string;
+};
+
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
   if (!supabaseClient) supabaseClient = createClient();
@@ -28,13 +37,23 @@ export default function Home() {
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [selectedForConnection, setSelectedForConnection] = useState<Node[]>([]);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expanding, setExpanding] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [mapTitle, setMapTitle] = useState("Untitled research map");
+  const [currentMapId, setCurrentMapId] = useState<string | null>(null);
+  const [currentMapOwnerId, setCurrentMapOwnerId] = useState<string | null>(null);
+  const [leavingMap, setLeavingMap] = useState(false);
+  const [showSavedMaps, setShowSavedMaps] = useState(false);
+  const [savedMaps, setSavedMaps] = useState<SavedResearchMap[]>([]);
+  const [loadingMaps, setLoadingMaps] = useState(false);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -45,17 +64,37 @@ export default function Home() {
         router.replace("/login");
         return;
       }
+      setCurrentUserId(user.id);
       setUserEmail(user.email ?? null);
+
+      const requestedMapId = new URLSearchParams(window.location.search).get("map");
+      if (requestedMapId) {
+        const { data: requestedMap, error } = await getSupabase()
+          .from("research_maps")
+          .select("id, user_id, title, nodes, edges")
+          .eq("id", requestedMapId)
+          .maybeSingle();
+        if (requestedMap && !error) {
+          setNodes(requestedMap.nodes ?? []);
+          setEdges(requestedMap.edges ?? []);
+          setMapTitle(requestedMap.title ?? "Untitled research map");
+          setCurrentMapId(requestedMap.id);
+          setCurrentMapOwnerId(requestedMap.user_id);
+        }
+      }
     };
     void loadUser();
     const {
       data: { subscription },
     } = getSupabase().auth.onAuthStateChange((_e, session) => {
       if (!session?.user) router.replace("/login");
-      else setUserEmail(session.user.email ?? null);
+      else {
+        setCurrentUserId(session.user.id);
+        setUserEmail(session.user.email ?? null);
+      }
     });
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [router, setEdges, setNodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
@@ -85,6 +124,7 @@ export default function Home() {
     const submittedTopic = topic.trim();
     if (!submittedTopic) return;
     setLoading(true);
+    setMapTitle(submittedTopic);
     setSelectedNode(null);
     try {
       const response = await fetch("/api/generate", {
@@ -208,22 +248,285 @@ export default function Home() {
     }
   }
 
+  async function saveCurrentMap() {
+    if (nodes.length === 0) {
+      setSaveMessage("Generate a map first.");
+      return false;
+    }
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      const {
+        data: { user },
+      } = await getSupabase().auth.getUser();
+      if (!user) {
+        setSaveMessage("Please log in again.");
+        return false;
+      }
+      const mapData = {
+        title: mapTitle || "Untitled research map",
+        nodes,
+        edges,
+      };
+      if (currentMapId) {
+        const { error } = await getSupabase()
+          .from("research_maps")
+          .update(mapData)
+          .eq("id", currentMapId);
+        if (error) throw error;
+        setSaveMessage("Workspace updated.");
+      } else {
+        const { data, error } = await getSupabase()
+          .from("research_maps")
+          .insert({ ...mapData, user_id: user.id })
+          .select("id, user_id")
+          .single();
+        if (error) throw error;
+        setCurrentMapId(data.id);
+        setCurrentMapOwnerId(data.user_id);
+        setSaveMessage("Workspace saved.");
+      }
+      return true;
+    } catch (error) {
+      console.error("Save error:", error);
+      setSaveMessage("Could not save workspace.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function leaveCurrentMap() {
+    if (!currentMapId || !currentUserId || currentMapOwnerId === currentUserId) return;
+
+    if (nodes.length > 0) {
+      const choice = window.confirm(
+        "Save your changes before leaving this shared map?\n\nOK = Save then leave\nCancel = Leave without saving"
+      );
+      if (choice) {
+        const saved = await saveCurrentMap();
+        if (!saved) {
+          const force = window.confirm("Save failed. Leave anyway without saving?");
+          if (!force) return;
+        }
+      }
+    } else if (
+      !window.confirm("Leave this shared map? You will no longer be able to access it.")
+    ) {
+      return;
+    }
+
+    setLeavingMap(true);
+    setSaveMessage(null);
+    try {
+      const response = await fetch("/api/maps/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mapId: currentMapId }),
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(data?.error ?? "Unable to leave this map.");
+      setCurrentMapId(null);
+      setCurrentMapOwnerId(null);
+      setNodes([]);
+      setEdges([]);
+      setMapTitle("Untitled research map");
+      setSelectedNode(null);
+      setMenuOpen(false);
+      setSaveMessage("You left the map.");
+    } catch (error) {
+      console.error("Leave error:", error);
+      setSaveMessage(
+        error instanceof Error ? error.message : "Unable to leave this map."
+      );
+    } finally {
+      setLeavingMap(false);
+    }
+  }
+
+  async function loadSavedMaps() {
+    setLoadingMaps(true);
+    const {
+      data: { user },
+    } = await getSupabase().auth.getUser();
+    if (!user) {
+      setLoadingMaps(false);
+      return;
+    }
+    const { data, error } = await getSupabase()
+      .from("research_maps")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) console.error("Failed to load maps:", error.message);
+    else setSavedMaps((data as SavedResearchMap[]) ?? []);
+    setLoadingMaps(false);
+  }
+
+  function openSavedMap(map: SavedResearchMap) {
+    setNodes(map.nodes ?? []);
+    setEdges(map.edges ?? []);
+    setMapTitle(map.title ?? "Untitled research map");
+    setCurrentMapId(map.id);
+    setCurrentMapOwnerId(map.user_id);
+    setShowSavedMaps(false);
+    setMenuOpen(false);
+    setSelectedNode(null);
+  }
+
   async function handleLogout() {
     await getSupabase().auth.signOut();
     router.replace("/login");
   }
 
+  const isCollaborator = Boolean(
+    currentMapId && currentUserId && currentMapOwnerId && currentMapOwnerId !== currentUserId
+  );
+
+  const menuItems = (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          void saveCurrentMap();
+          setMenuOpen(false);
+        }}
+        disabled={saving || nodes.length === 0}
+        className="flex w-full items-center justify-between rounded-xl border border-lab-copper/20 bg-lab-copper/10 px-4 py-3 text-left text-sm font-medium text-lab-copper disabled:opacity-40"
+      >
+        <span>{saving ? "Saving…" : "Save map"}</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setShowSavedMaps(true);
+          void loadSavedMaps();
+          setMenuOpen(false);
+        }}
+        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-medium"
+      >
+        Saved maps
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setConnectMode((c) => !c);
+          setSelectedForConnection([]);
+          setSelectedNode(null);
+          setMenuOpen(false);
+        }}
+        className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm font-medium ${
+          connectMode
+            ? "border-lab-lime bg-lab-lime/20 text-lab-lime-light"
+            : "border-white/10 bg-white/5"
+        }`}
+      >
+        {connectMode ? "Exit connect mode" : "Connect topics"}
+      </button>
+
+      {isCollaborator ? (
+        <button
+          type="button"
+          onClick={() => void leaveCurrentMap()}
+          disabled={leavingMap}
+          className="flex w-full items-center justify-between rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-left text-sm font-medium text-red-300 disabled:opacity-50"
+        >
+          {leavingMap ? "Leaving…" : "Leave map"}
+        </button>
+      ) : null}
+
+      <div className="border-t border-white/10 pt-3">
+        <div className="mb-3 px-1">
+          <BillingSummary />
+        </div>
+        {userEmail ? (
+          <p className="mb-3 truncate px-1 text-xs text-white/40">{userEmail}</p>
+        ) : null}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex w-full items-center justify-between rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-left text-sm font-medium text-red-300"
+        >
+          Log out
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <main className="relative h-dvh w-full overflow-hidden bg-background font-sans text-foreground">
-      <header className="absolute left-0 right-0 top-0 z-30 flex flex-col gap-3 border-b border-white/10 bg-background/95 px-3 py-3 backdrop-blur-xl sm:px-5 2xl:flex-row 2xl:items-center 2xl:justify-between">
-        <div className="flex items-center justify-between gap-3 2xl:block">
-          <h1 className="text-xl font-bold tracking-[-0.03em]">
-            MindLab<span className="text-lab-lime">AI</span>
-          </h1>
-          <p className="mt-0.5 hidden text-xs text-white/40 sm:block">
-            Turn thoughts into knowledge
-          </p>
-          <div className="flex shrink-0 items-center gap-2 2xl:hidden">
+      <header className="absolute left-0 right-0 top-0 z-30 border-b border-white/10 bg-background/95 backdrop-blur-xl">
+        <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4">
+          <div className="min-w-0 shrink-0">
+            <h1 className="text-lg font-bold tracking-[-0.03em] sm:text-xl">
+              MindLab<span className="text-lab-lime">AI</span>
+            </h1>
+          </div>
+
+          <form onSubmit={generateMindMap} className="flex min-w-0 flex-1 items-center gap-2">
+            <input
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="Add a topic…"
+              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-lab-lime/50"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="min-h-10 shrink-0 rounded-xl bg-lab-lime px-3 py-2 text-sm font-semibold text-lab-ink disabled:opacity-50"
+            >
+              {loading ? "…" : "Add"}
+            </button>
+          </form>
+
+          <div className="hidden items-center gap-2 lg:flex">
+            <button
+              type="button"
+              onClick={() => {
+                setConnectMode((c) => !c);
+                setSelectedForConnection([]);
+                setSelectedNode(null);
+              }}
+              className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-medium ${
+                connectMode
+                  ? "border-lab-lime bg-lab-lime/20 text-lab-lime-light"
+                  : "border-white/10 bg-white/5"
+              }`}
+            >
+              Connect
+              {selectedForConnection.length > 0
+                ? ` (${selectedForConnection.length}/2)`
+                : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveCurrentMap()}
+              disabled={saving || nodes.length === 0}
+              className="min-h-10 rounded-xl border border-lab-copper/20 bg-lab-copper/10 px-3 py-2 text-sm font-medium text-lab-copper disabled:opacity-40"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSavedMaps(true);
+                void loadSavedMaps();
+              }}
+              className="min-h-10 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium"
+            >
+              Saved
+            </button>
+            {isCollaborator ? (
+              <button
+                type="button"
+                onClick={() => void leaveCurrentMap()}
+                disabled={leavingMap}
+                className="min-h-10 rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 disabled:opacity-50"
+              >
+                {leavingMap ? "Leaving…" : "Leave map"}
+              </button>
+            ) : null}
             <BillingSummary />
             <button
               type="button"
@@ -233,55 +536,45 @@ export default function Home() {
               Log out
             </button>
           </div>
-        </div>
 
-        <div className="flex w-full flex-wrap items-center gap-2 2xl:w-auto">
-          <form onSubmit={generateMindMap} className="flex min-w-0 flex-1 gap-2 sm:flex-none">
-            <input
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="Add a research topic..."
-              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-lab-lime/50 sm:w-56"
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex min-h-10 min-w-10 shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 lg:hidden"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+          >
+            <span
+              className={`block h-0.5 w-5 bg-white transition ${
+                menuOpen ? "translate-y-2 rotate-45" : ""
+              }`}
             />
-            <button
-              type="submit"
-              disabled={loading}
-              className="min-h-10 rounded-xl bg-lab-lime px-3 py-2 text-sm font-medium text-lab-ink disabled:opacity-50"
-            >
-              {loading ? "…" : "Add"}
-            </button>
-          </form>
-
-          <button
-            type="button"
-            onClick={() => {
-              setConnectMode((c) => !c);
-              setSelectedForConnection([]);
-              setSelectedNode(null);
-            }}
-            className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-medium ${
-              connectMode
-                ? "border-lab-lime bg-lab-lime/20 text-lab-lime-light"
-                : "border-white/10 bg-white/5"
-            }`}
-          >
-            Connect{selectedForConnection.length > 0 ? ` (${selectedForConnection.length}/2)` : ""}
-          </button>
-
-          <div className="hidden 2xl:block">
-            <BillingSummary />
-          </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="hidden min-h-10 rounded-lg border border-red-400/20 bg-red-500/10 px-3 text-xs text-red-300 2xl:block"
-          >
-            Log out
+            <span
+              className={`block h-0.5 w-5 bg-white transition ${\n                menuOpen ? "opacity-0" : ""
+              }`}
+            />
+            <span
+              className={`block h-0.5 w-5 bg-white transition ${
+                menuOpen ? "-translate-y-2 -rotate-45" : ""
+              }`}
+            />
           </button>
         </div>
+
+        {saveMessage ? (
+          <p className="border-t border-white/5 px-3 py-1.5 text-xs text-white/55 sm:px-4">
+            {saveMessage}
+          </p>
+        ) : null}
+
+        {menuOpen ? (
+          <div className="border-t border-white/10 bg-background/98 px-3 py-3 lg:hidden">
+            <div className="mx-auto flex max-w-lg flex-col gap-2">{menuItems}</div>
+          </div>
+        ) : null}
       </header>
 
-      <div className="h-full w-full pt-32 sm:pt-36 md:pt-40 2xl:pt-[73px]">
+      <div className={`h-full w-full ${menuOpen ? "pt-72" : "pt-16"} lg:pt-[68px]`}>
         <MindMap
           nodes={nodes}
           edges={edges}
@@ -298,6 +591,45 @@ export default function Home() {
         onExpand={expandConcept}
         expanding={expanding}
       />
+
+      {showSavedMaps ? (
+        <div className="absolute inset-0 z-40 flex items-start justify-center bg-black/60 p-4 pt-20 backdrop-blur-sm">
+          <div className="max-h-[70dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface p-4 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Saved maps</h2>
+              <button
+                type="button"
+                onClick={() => setShowSavedMaps(false)}
+                className="rounded-lg px-2 py-1 text-white/50 hover:bg-white/10 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            {loadingMaps ? (
+              <p className="text-sm text-white/45">Loading…</p>
+            ) : savedMaps.length === 0 ? (
+              <p className="text-sm text-white/45">No saved maps yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {savedMaps.map((map) => (
+                  <li key={map.id}>
+                    <button
+                      type="button"
+                      onClick={() => openSavedMap(map)}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-left transition hover:bg-white/10"
+                    >
+                      <p className="truncate text-sm font-medium">{map.title}</p>
+                      <p className="mt-1 text-xs text-white/40">
+                        {new Date(map.created_at).toLocaleDateString()}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
