@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
@@ -6,11 +5,20 @@ import { parseJsonResponse } from "@/lib/ai/json";
 import { isRecord, parseAiRequest } from "@/lib/ai/request";
 import { getGenerationConfig, AI_GENERATION_LIMITS } from "@/lib/ai/token-budget";
 import { createClient } from "@/lib/supabase/server";
-import { enforceFeatureLimit, getPlanConfig, recordFeatureUsage } from "@/lib/paywall";
+import {
+  enforceFeatureLimit,
+  getPlanConfig,
+  isPaidPlan,
+  recordFeatureUsage,
+  resolveBillingUserId,
+} from "@/lib/paywall";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
+
+const NOTE_MAX_CHARS = 15000;
+const TOPIC_MAX_CHARS = 1000;
 
 const mindMapSchema = {
   type: "object",
@@ -61,12 +69,12 @@ function getProviderErrorDetails(error: unknown) {
   };
   const cause =
     providerError.cause && typeof providerError.cause === "object"
-      ? providerError.cause as {
+      ? (providerError.cause as {
           name?: unknown;
           status?: unknown;
           statusCode?: unknown;
           code?: unknown;
-        }
+        })
       : null;
 
   return {
@@ -115,21 +123,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const access = await enforceFeatureLimit({
-      userId: user.id,
-      feature: "generate",
-      request,
-    });
-
-    if (!access.allowed) {
-      return NextResponse.json(
-        {
-          error: access.message ?? `You have reached the ${getPlanConfig(access.planCode).name.toLowerCase()} plan limit for today. Upgrade to continue.`,
-        },
-        { status: 403 }
-      );
-    }
-
     const parsed = await parseAiRequest(request);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error }, { status: parsed.status });
@@ -137,21 +130,73 @@ export async function POST(request: Request) {
     if (!isRecord(parsed.data)) {
       return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     }
-    const topic = parsed.data.topic;
 
-    if (typeof topic !== "string" || !topic.trim()) {
+    const topic =
+      typeof parsed.data.topic === "string" ? parsed.data.topic.trim() : "";
+    const note =
+      typeof parsed.data.note === "string" ? parsed.data.note.trim() : "";
+    const mapId =
+      typeof parsed.data.mapId === "string" ? parsed.data.mapId.trim() : null;
+    const isNoteImport = note.length > 0;
+
+    if (!topic && !note) {
       return NextResponse.json(
-        { error: "Topic is required" },
+        { error: "Provide a topic or paste / upload a note." },
         { status: 400 }
       );
     }
-    if (topic.trim().length > 1000) {
-      return NextResponse.json({ error: "Topic must be 1000 characters or fewer." }, { status: 400 });
+
+    if (topic && topic.length > TOPIC_MAX_CHARS) {
+      return NextResponse.json(
+        { error: `Topic must be ${TOPIC_MAX_CHARS} characters or fewer.` },
+        { status: 400 }
+      );
+    }
+
+    if (note && note.length > NOTE_MAX_CHARS) {
+      return NextResponse.json(
+        { error: `Notes must be ${NOTE_MAX_CHARS.toLocaleString()} characters or fewer.` },
+        { status: 400 }
+      );
+    }
+
+    const billingUserId = await resolveBillingUserId({
+      userId: user.id,
+      mapId,
+    });
+
+    const feature = isNoteImport ? "import-note" : "generate";
+    const access = await enforceFeatureLimit({
+      userId: user.id,
+      billingUserId,
+      feature,
+      request,
+    });
+
+    if (isNoteImport && !getPlanConfig(access.planCode).allowsNoteImport) {
+      return NextResponse.json(
+        {
+          error:
+            "Note import is available on Student and Research plans. Upgrade to turn notes into maps.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!access.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            access.message ??
+            `You have reached the ${getPlanConfig(access.planCode).name.toLowerCase()} plan limit for today. Upgrade to continue.`,
+        },
+        { status: 403 }
+      );
     }
 
     const usageRecorded = await recordFeatureUsage({
-      userId: user.id,
-      feature: "generate",
+      userId: access.billingUserId,
+      feature,
     });
     if (!usageRecorded) {
       return NextResponse.json(
@@ -160,12 +205,38 @@ export async function POST(request: Request) {
       );
     }
 
-    const prompt = `
+    const nodeCount = getPlanConfig(access.planCode).mindMapNodeCount;
+
+    const prompt = isNoteImport
+      ? `
+You are building an educational mind map from a student's or researcher's notes.
+
+Notes:
+"""
+${note}
+"""
+
+${topic ? `Optional focus topic: "${topic}"\n` : ""}
+
+Generate exactly ${nodeCount} nodes total, including the root.
+
+Rules:
+- Derive the root title from the notes (or the focus topic if provided).
+- Capture the main ideas, definitions, and relationships present in the notes.
+- Do not invent major facts that are not supported by the notes.
+- Every node needs a unique ID.
+- Edges must reference existing node IDs.
+- Keep labels short; limit ordinary descriptions to 18 words.
+- Connect every non-root node to a parent so the graph is connected.
+- Prefer structure that helps study (theme → sub-idea → detail).
+- Write math in readable plain text, not LaTeX.
+`
+      : `
 Create an educational mind map about:
 
 "${topic}"
 
-Generate exactly ${getPlanConfig(access.planCode).mindMapNodeCount} nodes total, including the root.
+Generate exactly ${nodeCount} nodes total, including the root.
 
 Rules:
 - The main topic must be the root node.
@@ -206,9 +277,7 @@ Rules:
       outputEndsWithObject: /\}\s*$/.test(outputText),
       responseErrorCodes: response.errors?.map((error) => error.code ?? null),
       modelOutputErrors: response.steps?.flatMap((step) =>
-        step.type === "model_output" && step.error
-          ? [step.error.code ?? null]
-          : []
+        step.type === "model_output" && step.error ? [step.error.code ?? null] : []
       ),
       responseSteps: response.steps?.map((step) => step.type),
     };
@@ -227,11 +296,12 @@ Rules:
       failureKind:
         error instanceof Error && error.message === "AI interaction did not complete."
           ? "incomplete_interaction"
-          : error instanceof Error && error.message === "AI response contained an incomplete JSON object."
-          ? "incomplete_json"
-          : error instanceof Error && error.message.includes("JSON")
-            ? "invalid_json"
-            : undefined,
+          : error instanceof Error &&
+              error.message === "AI response contained an incomplete JSON object."
+            ? "incomplete_json"
+            : error instanceof Error && error.message.includes("JSON")
+              ? "invalid_json"
+              : undefined,
       generationDurationMs:
         generationStartedAt === null ? undefined : Date.now() - generationStartedAt,
       apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY),
@@ -244,4 +314,3 @@ Rules:
     );
   }
 }
-
