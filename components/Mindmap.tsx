@@ -21,10 +21,7 @@ type MindMapProps = {
   onNodesChange: OnNodesChange<Node>;
   onEdgesChange: OnEdgesChange<Edge>;
   onConnect: (connection: Connection) => void;
-  onNodeClick: (
-    event: React.MouseEvent,
-    node: Node
-  ) => void;
+  onNodeClick: (event: React.MouseEvent, node: Node) => void;
 };
 
 export default function MindMap({
@@ -37,29 +34,34 @@ export default function MindMap({
 }: MindMapProps) {
   return (
     <div className="h-full w-full bg-[radial-gradient(ellipse_at_center,rgba(200,241,105,0.045),transparent_62%)]">
-  <ReactFlow
-  nodes={nodes}
-  edges={edges}
-  onNodesChange={onNodesChange}
-  onEdgesChange={onEdgesChange}
-  onConnect={onConnect}
-  onNodeClick={onNodeClick}
->
-       <Background
-  variant={BackgroundVariant.Dots}
-  gap={24}
-  size={1}
-  color="#44533d"
-/>
-       <Controls
-  className="border-white/10! bg-lab-surface/90! shadow-xl! backdrop-blur!"
-/>
-
-        <MiniMap
-          nodeColor="#c8f169"
-          maskColor="rgba(0, 0, 0, 0.75)"
-          style={{ width: 120, height: 80, right: 12, bottom: 12 }}
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        panOnDrag
+        zoomOnPinch
+        panOnScroll={false}
+        minZoom={0.25}
+        maxZoom={1.75}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={24}
+          size={1}
+          color="#44533d"
         />
+        <Controls className="border-white/10! bg-lab-surface/90! shadow-xl! backdrop-blur!" />
+        <div className="hidden md:block">
+          <MiniMap
+            nodeColor="#c8f169"
+            maskColor="rgba(0, 0, 0, 0.75)"
+            style={{ width: 120, height: 80, right: 12, bottom: 12 }}
+          />
+        </div>
       </ReactFlow>
     </div>
   );
