@@ -12,6 +12,8 @@ type BillingStatus = {
 
 export default function BillingSummary() {
   const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -35,40 +37,84 @@ export default function BillingSummary() {
     };
   }, []);
 
+  async function openBillingPortal() {
+    setPortalError(null);
+    setPortalLoading(true);
+
+    try {
+      const response = await fetch("/api/payments/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { portalUrl?: string; error?: string }
+        | null;
+
+      if (!response.ok || !data?.portalUrl) {
+        throw new Error(
+          data?.error || "Unable to open subscription management."
+        );
+      }
+
+      window.location.assign(data.portalUrl);
+    } catch (error) {
+      setPortalError(
+        error instanceof Error
+          ? error.message
+          : "Unable to open subscription management."
+      );
+      setPortalLoading(false);
+    }
+  }
+
   if (!billing) return null;
+
+  const isPaidPlan =
+    billing.planName === "Student" || billing.planName === "Research";
 
   const usageLabel =
     billing.status === "cancelled"
       ? "Cancels at period end"
       : billing.dailyLimit === null
-      ? "Unlimited generations"
-      : billing.usageCount === null
-        ? `${billing.dailyLimit} generations/day`
-        : `${Math.max(0, billing.dailyLimit - billing.usageCount)} of ${billing.dailyLimit} left today`;
+        ? "Unlimited generations"
+        : billing.usageCount === null
+          ? `${billing.dailyLimit} generations/day`
+          : `${Math.max(0, billing.dailyLimit - billing.usageCount)} of ${billing.dailyLimit} left today`;
 
   return (
-    <div className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 sm:gap-3 sm:px-3">
-      <div className="min-w-0">
-        <p className="truncate text-[11px] font-semibold text-white sm:text-xs">
-          {billing.planName} plan
-        </p>
-        <p className="hidden text-[10px] text-white/45 sm:block">{usageLabel}</p>
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 sm:gap-3 sm:px-3">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-semibold text-white sm:text-xs">
+            {billing.planName} plan
+          </p>
+          <p className="hidden text-[10px] text-white/45 sm:block">{usageLabel}</p>
+        </div>
+
+        {isPaidPlan ? (
+          <button
+            type="button"
+            onClick={() => void openBillingPortal()}
+            disabled={portalLoading}
+            className="rounded-md border border-white/15 bg-white/5 px-2.5 py-1.5 text-[11px] font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-60 sm:text-xs"
+          >
+            {portalLoading ? "Opening…" : "Manage / Cancel"}
+          </button>
+        ) : (
+          <Link
+            href="/pricing"
+            className="rounded-md bg-lab-lime px-2.5 py-1.5 text-[11px] font-semibold text-lab-ink transition hover:bg-lab-lime-light sm:text-xs"
+          >
+            Upgrade
+          </Link>
+        )}
       </div>
-      {billing.planName !== "Research" ? (
-        <Link
-          href="/pricing"
-          className="rounded-md bg-lab-lime px-2.5 py-1.5 text-[11px] font-semibold text-lab-ink transition hover:bg-lab-lime-light sm:text-xs"
-        >
-          Upgrade
-        </Link>
-      ) : (
-        <Link
-          href="/pricing"
-          className="text-[11px] font-medium text-white/55 transition hover:text-white sm:text-xs"
-        >
-          Plans
-        </Link>
-      )}
+
+      {portalError ? (
+        <p className="max-w-[14rem] text-right text-[10px] leading-4 text-red-300">
+          {portalError}
+        </p>
+      ) : null}
     </div>
   );
 }

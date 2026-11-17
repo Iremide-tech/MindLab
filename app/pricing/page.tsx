@@ -120,7 +120,9 @@ export default async function PricingPage({
         </div>
 
         <p className="mt-10 text-center text-xs text-white/40">
-          Subscriptions renew monthly until cancelled. See our{" "}
+          Subscriptions renew monthly until cancelled. Paid users can cancel anytime
+          from the dashboard via <span className="text-white/60">Manage / Cancel</span>.
+          See our{" "}
           <Link href="/terms" className="text-lab-lime hover:underline">
             Terms
           </Link>{" "}
