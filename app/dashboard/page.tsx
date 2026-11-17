@@ -10,6 +10,7 @@ import {
   type Connection,
   type Edge,
   type Node,
+  MarkerType,
 } from "@xyflow/react";
 import MindMap from "@/components/Mindmap";
 import KnowledgePanel from "@/components/KnowledgePanel";
@@ -213,10 +214,16 @@ export default function Home() {
         id: `ai-connection-${connection.source}-${connection.target}-${Date.now()}`,
         source: connection.source,
         target: connection.target,
+        type: "smoothstep",
         label: connection.label,
+        labelShowBg: true,
+        labelBgStyle: { fill: "#171b12", fillOpacity: 0.96 },
+        labelBgPadding: [8, 5] as [number, number],
+        labelBgBorderRadius: 6,
+        labelStyle: { fill: "#e5f5bd", fontSize: 12, fontWeight: 600 },
         animated: true,
-        style: { stroke: "rgba(200, 241, 105, 0.8)", strokeWidth: 1.8 },
-        labelStyle: { fill: "#d9f99d", fontSize: 11 },
+        style: { stroke: "#c8f169", strokeWidth: 2.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: "#c8f169", width: 18, height: 18 },
       },
     ]);
     setConnectionAnalysis((current) =>
