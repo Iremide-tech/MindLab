@@ -193,7 +193,7 @@ const [exampleError, setExampleError] = useState<string | null>(null);
     : 0;
 
   return (
-    <aside className="absolute bottom-3 left-3 right-3 top-auto z-30 max-h-[52dvh] overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface/95 p-4 text-white shadow-2xl backdrop-blur-xl sm:bottom-5 sm:p-5 md:bottom-auto md:left-auto md:right-5 md:top-56 md:max-h-[calc(100dvh-15rem)] md:w-[22rem] 2xl:top-24 2xl:max-h-[calc(100dvh-7rem)]">
+    <aside className="absolute bottom-3 left-3 right-3 top-auto z-30 max-h-[45dvh] sm:max-h-[52dvh] overflow-y-auto rounded-2xl border border-white/10 bg-lab-surface/95 p-4 text-white shadow-2xl backdrop-blur-xl sm:bottom-5 sm:p-5 md:bottom-auto md:left-auto md:right-5 md:top-56 md:max-h-[calc(100dvh-15rem)] md:w-[22rem] 2xl:top-24 2xl:max-h-[calc(100dvh-7rem)]">
 
       {/* Header */}
 
