@@ -8,12 +8,40 @@ export const metadata: Metadata = {
   description:
     "Turn notes and questions into a visual map you can explore with AI, save, and share.",
 };
+
 const workflow = [
   "Create a workspace",
   "Add a topic",
   "Connect ideas",
   "Ask AI",
   "Return when ready",
+];
+
+const quotes = [
+  {
+    text: "The only true wisdom is in knowing you know nothing.",
+    author: "Socrates",
+  },
+  {
+    text: "I think, therefore I am.",
+    author: "René Descartes",
+  },
+  {
+    text: "Education is the kindling of a flame, not the filling of a vessel.",
+    author: "Plutarch",
+  },
+  {
+    text: "The important thing is not to stop questioning.",
+    author: "Albert Einstein",
+  },
+  {
+    text: "Knowledge is of no value unless you put it into practice.",
+    author: "Anton Chekhov",
+  },
+  {
+    text: "An investment in knowledge pays the best interest.",
+    author: "Benjamin Franklin",
+  },
 ];
 
 export default function LandingPage() {
@@ -85,6 +113,25 @@ export default function LandingPage() {
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className={styles.quotes} aria-labelledby="quotes-heading">
+        <div className={styles.sectionBar}>
+          <h2 id="quotes-heading">Voices on knowledge.</h2>
+          <p>Ideas that map how we learn.</p>
+        </div>
+        <div className={styles.quoteGrid}>
+          {quotes.map((quote) => (
+            <blockquote key={quote.author} className={styles.quoteCard}>
+              <p className={styles.quoteText}>
+                &ldquo;{quote.text}&rdquo;
+              </p>
+              <footer className={styles.quoteAuthor}>
+                — {quote.author}
+              </footer>
+            </blockquote>
+          ))}
+        </div>
       </section>
 
       <section className={styles.audiences}>
