@@ -125,6 +125,28 @@ export async function POST(request: Request) {
       );
     }
 
+    // Customer IDs from Stripe test mode are invalid once you switch to live keys.
+    let customerId =
+      typeof existingPlan?.stripe_customer_id === "string"
+        ? existingPlan.stripe_customer_id.trim()
+        : "";
+
+    if (customerId) {
+      try {
+        await stripe.customers.retrieve(customerId);
+      } catch (customerError) {
+        console.warn(
+          "Stored Stripe customer is missing in this mode; clearing and using email.",
+          customerError
+        );
+        customerId = "";
+        await admin
+          .from("user_plans")
+          .update({ stripe_customer_id: null })
+          .eq("user_id", user.id);
+      }
+    }
+
     const metadata = { user_id: user.id, plan: requestedPlan };
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -137,9 +159,7 @@ export async function POST(request: Request) {
       client_reference_id: user.id,
       metadata,
       subscription_data: { metadata },
-      ...(existingPlan?.stripe_customer_id
-        ? { customer: existingPlan.stripe_customer_id }
-        : { customer_email: user.email }),
+      ...(customerId ? { customer: customerId } : { customer_email: user.email }),
     });
 
     if (!session.url) {
