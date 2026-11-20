@@ -1,7 +1,7 @@
 export const AI_GENERATION_LIMITS = {
   generate: 3000,
-  expand:1600,
-  explain: 500,
+  expand: 1600,
+  explain: 1400,
   connect: 800,
   quiz: 1500,
 } as const;

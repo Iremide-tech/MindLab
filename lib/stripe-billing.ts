@@ -17,10 +17,27 @@ export function getExpectedPlanAmount(plan: PaidPlanCode): number {
 }
 
 export function getStripePriceId(plan: PaidPlanCode): string | null {
-  const priceId = plan === "student"
-    ? process.env.STRIPE_STUDENT_PRICE_ID
-    : process.env.STRIPE_RESEARCH_PRICE_ID;
+  const priceId =
+    plan === "student"
+      ? process.env.STRIPE_STUDENT_PRICE_ID
+      : process.env.STRIPE_RESEARCH_PRICE_ID;
   return priceId?.trim() || null;
+}
+
+/** Normalize env values that may include quotes or trailing whitespace from the dashboard. */
+export function getStripeSecretKey(): string | null {
+  const raw = process.env.STRIPE_SECRET_KEY;
+  if (!raw) return null;
+  const trimmed = raw.trim().replace(/^['"]|['"]$/g, "");
+  return trimmed || null;
+}
+
+export function isLiveStripeSecretKey(secretKey: string): boolean {
+  return secretKey.startsWith("sk_live_");
+}
+
+export function isTestStripeSecretKey(secretKey: string): boolean {
+  return secretKey.startsWith("sk_test_");
 }
 
 export function mapStripeSubscriptionStatus(
@@ -39,7 +56,7 @@ export function mapStripeSubscriptionStatus(
 }
 
 export function createStripeClient(): Stripe {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = getStripeSecretKey();
   if (!secretKey) {
     throw new Error("Stripe is not configured.");
   }

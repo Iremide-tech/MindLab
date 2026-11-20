@@ -4,6 +4,8 @@ import {
   createStripeClient,
   getExpectedPlanAmount,
   getStripePriceId,
+  getStripeSecretKey,
+  isLiveStripeSecretKey,
   isPaidPlanCode,
 } from "@/lib/stripe-billing";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -40,27 +42,36 @@ export async function POST(request: Request) {
     }
 
     if (!user.email) {
-      return NextResponse.json({ error: "Your account needs an email address to check out." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Your account needs an email address to check out." },
+        { status: 400 }
+      );
     }
 
-    const secretKey = process.env.STRIPE_SECRET_KEY;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const secretKey = getStripeSecretKey();
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
     const priceId = getStripePriceId(requestedPlan);
 
     if (!secretKey || !siteUrl || !priceId) {
       return NextResponse.json(
-        { error: "Stripe billing is not configured. Set the Stripe secret, monthly price IDs, and site URL." },
+        {
+          error:
+            "Stripe billing is not configured. Set STRIPE_SECRET_KEY, STRIPE_STUDENT_PRICE_ID / STRIPE_RESEARCH_PRICE_ID, and NEXT_PUBLIC_SITE_URL.",
+        },
         { status: 503 }
       );
     }
 
-    if (process.env.NODE_ENV === "production" && !secretKey.startsWith("sk_live_")) {
+    if (process.env.NODE_ENV === "production" && !isLiveStripeSecretKey(secretKey)) {
       return NextResponse.json(
-        { error: "Live billing requires a Stripe live secret key." },
+        {
+          error:
+            "Live billing requires STRIPE_SECRET_KEY to start with sk_live_. Update it under Vercel → Project → Settings → Environment Variables (Production), then redeploy.",
+        },
         { status: 503 }
       );
     }
-    if (process.env.NODE_ENV !== "production" && secretKey.startsWith("sk_live_")) {
+    if (process.env.NODE_ENV !== "production" && isLiveStripeSecretKey(secretKey)) {
       return NextResponse.json(
         { error: "Live Stripe keys are disabled in local development. Use test keys locally." },
         { status: 503 }
@@ -75,7 +86,10 @@ export async function POST(request: Request) {
       }
       siteOrigin = configuredUrl.origin;
     } catch {
-      return NextResponse.json({ error: "The site URL is not configured correctly." }, { status: 500 });
+      return NextResponse.json(
+        { error: "The site URL is not configured correctly." },
+        { status: 500 }
+      );
     }
 
     const stripe = createStripeClient();
@@ -103,27 +117,31 @@ export async function POST(request: Request) {
     if (customerLookupError) {
       console.error("Unable to look up Stripe customer:", customerLookupError);
       return NextResponse.json(
-        { error: "Billing data is not ready. Apply the Stripe billing migration and try again." },
+        {
+          error:
+            "Billing data is not ready. Apply the Stripe billing migration and try again.",
+        },
         { status: 503 }
       );
     }
 
     const metadata = { user_id: user.id, plan: requestedPlan };
-   const session = await stripe.checkout.sessions.create({
-  mode: "subscription",
-  line_items: [{ price: priceId, quantity: 1 }],
-  success_url: new URL(
-    "/pricing?checkout=processing&session_id={CHECKOUT_SESSION_ID}",
-    siteOrigin
-  ).toString(),
-  cancel_url: new URL("/pricing?checkout=cancelled", siteOrigin).toString(),
-  client_reference_id: user.id,
-  metadata,
-  subscription_data: { metadata },
-  ...(existingPlan?.stripe_customer_id
-    ? { customer: existingPlan.stripe_customer_id }
-    : { customer_email: user.email }),
-});
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: new URL(
+        "/pricing?checkout=processing&session_id={CHECKOUT_SESSION_ID}",
+        siteOrigin
+      ).toString(),
+      cancel_url: new URL("/pricing?checkout=cancelled", siteOrigin).toString(),
+      client_reference_id: user.id,
+      metadata,
+      subscription_data: { metadata },
+      ...(existingPlan?.stripe_customer_id
+        ? { customer: existingPlan.stripe_customer_id }
+        : { customer_email: user.email }),
+    });
+
     if (!session.url) {
       return NextResponse.json(
         { error: "Stripe could not create a checkout URL." },

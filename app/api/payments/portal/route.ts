@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { createStripeClient } from "@/lib/stripe-billing";
+import {
+  createStripeClient,
+  getStripeSecretKey,
+  isLiveStripeSecretKey,
+} from "@/lib/stripe-billing";
 import { getSiteUrl } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -19,17 +23,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const secretKey = process.env.STRIPE_SECRET_KEY;
+    const secretKey = getStripeSecretKey();
     if (!secretKey) {
       return NextResponse.json(
-        { error: "Stripe billing is not configured." },
+        { error: "Stripe billing is not configured. Set STRIPE_SECRET_KEY in Vercel." },
         { status: 503 }
       );
     }
 
-    if (process.env.NODE_ENV === "production" && !secretKey.startsWith("sk_live_")) {
+    if (process.env.NODE_ENV === "production" && !isLiveStripeSecretKey(secretKey)) {
       return NextResponse.json(
-        { error: "Live billing requires a Stripe live secret key." },
+        {
+          error:
+            "Live billing requires STRIPE_SECRET_KEY to start with sk_live_. Update it under Vercel → Project → Settings → Environment Variables (Production), then redeploy.",
+        },
         { status: 503 }
       );
     }

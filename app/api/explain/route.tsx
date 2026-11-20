@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
@@ -65,11 +64,7 @@ export async function POST(request: Request) {
 
     const { label, description, mode } = parsed.data;
 
-    if (
-      mode !== undefined &&
-      mode !== "example" &&
-      mode !== "simpler"
-    ) {
+    if (mode !== undefined && mode !== "example" && mode !== "simpler") {
       return NextResponse.json(
         { error: "Invalid explanation mode." },
         { status: 400 }
@@ -106,8 +101,7 @@ export async function POST(request: Request) {
     if (
       label.trim().length > 300 ||
       (description !== undefined &&
-        (typeof description !== "string" ||
-          description.length > 4000))
+        (typeof description !== "string" || description.length > 4000))
     ) {
       return NextResponse.json(
         { error: "Concept details are too long." },
@@ -129,16 +123,18 @@ Current description:
 ${description || "No description provided."}
 
 Rules:
-- Start with a realistic, relatable example.
-- Explain exactly how the example demonstrates the concept.
+- Start with a realistic, relatable scenario.
+- Explain exactly how the example demonstrates the concept, in 2–4 short paragraphs if needed.
+- Cover the key idea, why it matters, and one practical takeaway.
 - Use simple language without unnecessary jargon.
-- Keep the response under 150 words.
+- Keep the response about 150–220 words.
 - Ensure the example is accurate and relevant.
+- End with a complete sentence and final punctuation.
 `
         : `
 You are an AI research tutor.
 
-Explain this concept in a much simpler way.
+Explain this concept in a clearer, simpler way without losing the important ideas.
 
 Concept:
 ${label}
@@ -147,22 +143,21 @@ Current description:
 ${description || "No description provided."}
 
 Rules:
-- Explain it as if teaching a curious student.
-- Use simple language.
-- Avoid unnecessary jargon.
-- Use a short analogy when useful.
-- Do not oversimplify to the point of becoming inaccurate.
-- Write one self-contained explanation of 80–120 words.
-- Every sentence must be complete. End the response after a completed sentence,
-  with a period, question mark, or exclamation mark.
+- Teach a curious student who is smart but new to the topic.
+- Open with a one-sentence plain-language definition.
+- Then explain the main idea in everyday language.
+- Use one short analogy when it helps.
+- Cover what it is, why it matters, and how it connects to related ideas when useful.
+- Avoid unnecessary jargon; if a technical term is essential, define it briefly.
+- Do not oversimplify so much that the explanation becomes inaccurate or incomplete.
+- Write a self-contained explanation of about 150–220 words (enough depth to actually teach the idea).
+- Use complete sentences only. End after a finished sentence with a period, question mark, or exclamation mark.
 `;
 
     const response = await ai.interactions.create({
       model: "gemini-3.8-flash",
       input: prompt,
-      generation_config: getGenerationConfig(
-        AI_GENERATION_LIMITS.explain
-      ),
+      generation_config: getGenerationConfig(AI_GENERATION_LIMITS.explain),
     });
 
     let explanation = response.output_text?.trim();
@@ -171,14 +166,11 @@ Rules:
       throw new Error("The AI returned an empty explanation.");
     }
 
-    // A response can occasionally stop at the output-token boundary. A cleanup
-    // retry is useful, but its failure must not discard an otherwise usable
-    // explanation.
     if (mode !== "example" && !endsWithCompleteSentence(explanation)) {
       try {
         const retry = await ai.interactions.create({
           model: "gemini-3.8-flash",
-          input: `Rewrite this explanation as one self-contained 80–120 word response for a curious student. Use only complete sentences and end with punctuation. Do not mention that you are rewriting it.\n\n${explanation}`,
+          input: `Rewrite this explanation as one self-contained 150–220 word response for a curious student. Keep the key ideas; use only complete sentences and end with punctuation. Do not mention that you are rewriting it.\n\n${explanation}`,
           generation_config: getGenerationConfig(AI_GENERATION_LIMITS.explain),
         });
         const revisedExplanation = retry.output_text?.trim();
@@ -205,8 +197,7 @@ Rules:
 
     return NextResponse.json(
       {
-        error:
-          "AI explanation is temporarily unavailable. Please try again.",
+        error: "AI explanation is temporarily unavailable. Please try again.",
       },
       { status: 502 }
     );
