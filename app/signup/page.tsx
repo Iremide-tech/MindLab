@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { FormEvent } from "react";
@@ -126,7 +125,7 @@ export default function SignupPage() {
               const returnPath = getSafePostAuthPath(
                 new URLSearchParams(window.location.search).get("redirect")
               );
-              if (returnPath !== "/dashboard") {
+              if (returnPath !== "/workspaces" && returnPath !== "/dashboard") {
                 event.preventDefault();
                 router.push(`/login?redirect=${encodeURIComponent(returnPath)}`);
               }
