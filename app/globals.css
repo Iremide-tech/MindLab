@@ -3,11 +3,10 @@
 :root {
   --background: #080b09;
   --foreground: #f3f5ef;
-  /* Deeper, richer lime — less washed-out on dark UI */
-  --lab-lime: #9fd93a;
-  --lab-lime-light: #b8ef55;
-  --lab-lime-soft: #c5e87a;
-  --lab-ink: #10180a;
+  --lab-lime: #c8f169;
+  --lab-lime-light: #d8ff87;
+  --lab-lime-soft: #d9f4a6;
+  --lab-ink: #15200c;
   --lab-surface: #101511;
   --lab-canvas: #0b100d;
   --lab-card: #151b16;
