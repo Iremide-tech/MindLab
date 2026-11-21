@@ -84,6 +84,12 @@ export default function BillingSummary() {
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 sm:gap-3 sm:px-3">
+        <Link
+          href="/workspaces"
+          className="hidden rounded-md px-2 py-1 text-[11px] font-medium text-white/70 transition hover:bg-white/10 hover:text-white sm:inline sm:text-xs"
+        >
+          Workspaces
+        </Link>
         <div className="min-w-0">
           <p className="truncate text-[11px] font-semibold text-white sm:text-xs">
             {billing.planName} plan
