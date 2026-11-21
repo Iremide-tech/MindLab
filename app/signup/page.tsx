@@ -40,18 +40,31 @@ export default function SignupPage() {
       const data = (await response.json().catch(() => null)) as {
         error?: string;
         message?: string;
+        success?: boolean;
       } | null;
 
-      if (!response.ok) {
-        setError(data?.error || "Unable to create your account. Try again.");
-      } else {
+      if (response.ok && (data?.success || data?.message)) {
         setMessage(
           data?.message ||
-            "Account created! Check your email to confirm your account."
+            "Account created! Check your email to confirm your account, then sign in."
         );
+        return;
       }
+
+      // If the network reported failure but the body still looks like success, prefer success.
+      if (data?.success || (data?.message && /check your email/i.test(data.message))) {
+        setMessage(data.message || "Check your email to confirm your account, then sign in.");
+        return;
+      }
+
+      setError(
+        data?.error ||
+          "Unable to create your account. If you got a confirmation email, open that link and sign in."
+      );
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError(
+        "Network error after signup. If you received a confirmation email, open that link and sign in."
+      );
     } finally {
       setLoading(false);
     }

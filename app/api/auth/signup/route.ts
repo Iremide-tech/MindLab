@@ -54,7 +54,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Always resolve from server env — never from the browser origin.
     const emailRedirectTo = getAuthCallbackUrl(redirectPath);
 
     const supabase = createClient(supabaseUrl, anonKey, {
@@ -64,7 +63,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -73,24 +72,64 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      const message = /already exists|already registered|duplicate key/i.test(
-        error.message
-      )
-        ? "An account already exists for this email. Sign in instead."
-        : "Unable to create your account. Check your details and try again.";
+      console.error("Supabase signUp error:", error.message, error.status);
 
-      return NextResponse.json({ error: message }, { status: 400 });
+      if (/already exists|already registered|duplicate key|user already/i.test(error.message)) {
+        return NextResponse.json(
+          {
+            error:
+              "An account already exists for this email. Sign in, or check your inbox for a confirmation link.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (/rate limit|too many/i.test(error.message)) {
+        return NextResponse.json(
+          {
+            error:
+              "Too many signup attempts. Wait a minute, then try again (check your email — a link may already have been sent).",
+          },
+          { status: 429 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            error.message ||
+            "Unable to create your account. Check your details and try again.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Supabase may return a user with empty identities when the email is already registered
+    // (anti-enumeration). Treat a real new user / pending confirmation as success.
+    const identities = data.user?.identities;
+    if (data.user && Array.isArray(identities) && identities.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "An account already exists for this email. Sign in, or check your inbox for a confirmation link.",
+        },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message: "Account created! Check your email to confirm your account.",
+      message:
+        "Account created! Check your email to confirm your account, then sign in.",
       emailRedirectTo,
     });
   } catch (error) {
     console.error("Signup route failed:", error);
     return NextResponse.json(
-      { error: "Something went wrong. Please try again." },
+      {
+        error:
+          "Something went wrong on the server. If you received a confirmation email, open that link and sign in.",
+      },
       { status: 500 }
     );
   }
