@@ -50,6 +50,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/auth") ||
     pathname.startsWith("/invite") ||
     pathname === "/api/payments/webhook" ||
+    pathname === "/api/auth/signup" ||
     pathname.startsWith("/api/invitations/");
 
   if (!user && !isPublicRoute) {
