@@ -1,23 +1,13 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSafePostAuthPath } from "@/lib/invitations/redirect";
-import { getAuthCallbackUrl } from "@/lib/site-url";
 
 export default function SignupPage() {
   const router = useRouter();
-  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
-  const getSupabase = () => {
-    if (!supabaseRef.current) {
-      supabaseRef.current = createClient();
-    }
-
-    return supabaseRef.current;
-  };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,25 +26,29 @@ export default function SignupPage() {
       const returnPath = getSafePostAuthPath(
         new URLSearchParams(window.location.search).get("redirect")
       );
-      // Prefer production site URL so confirmation emails never point at localhost.
-      const callbackUrl = getAuthCallbackUrl(returnPath, window.location.origin);
 
-      const { error } = await getSupabase().auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          emailRedirectTo: callbackUrl,
-        },
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          redirect: returnPath,
+        }),
       });
 
-      if (error) {
-        setError(
-          /already exists|already registered|duplicate key/i.test(error.message)
-            ? "An account already exists for this Gmail address. Sign in to that account instead."
-            : "Unable to create your account. Check your details and try again."
-        );
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+        message?: string;
+      } | null;
+
+      if (!response.ok) {
+        setError(data?.error || "Unable to create your account. Try again.");
       } else {
-        setMessage("Account created! Check your email to confirm your account.");
+        setMessage(
+          data?.message ||
+            "Account created! Check your email to confirm your account."
+        );
       }
     } catch {
       setError("Something went wrong. Please try again.");
@@ -106,15 +100,11 @@ export default function SignupPage() {
         </form>
 
         {error && (
-          <p className="mt-4 text-center text-sm text-red-400">
-            {error}
-          </p>
+          <p className="mt-4 text-center text-sm text-red-400">{error}</p>
         )}
 
         {message && (
-          <p className="mt-4 text-center text-sm text-green-400">
-            {message}
-          </p>
+          <p className="mt-4 text-center text-sm text-green-400">{message}</p>
         )}
 
         <p className="mt-6 text-center text-sm text-white/50">

@@ -51,7 +51,7 @@ export function getSiteUrl(fallbackOrigin?: string): string {
 }
 
 export function getAuthCallbackUrl(
-  redirectPath = "/dashboard",
+  redirectPath = "/workspaces",
   fallbackOrigin?: string
 ) {
   const origin = getSiteUrl(fallbackOrigin);
