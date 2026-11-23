@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 /**
- * Adds a Leave control on /dashboard that prompts about saving,
+ * Adds a Leave control on /dashboard that asks whether to save,
  * then returns to the workspaces home.
  */
 export default function DashboardLeaveEnhancer() {
@@ -14,90 +14,92 @@ export default function DashboardLeaveEnhancer() {
     const btnId = "mindlab-leave-workspace-btn";
     const menuId = "mindlab-leave-workspace-menu";
 
-    function goToWorkspaces(saveFirst: boolean) {
-      if (saveFirst) {
-        // Trigger the existing Save button if present
-        const saveBtn = Array.from(document.querySelectorAll("button")).find(
-          (el) => {
-            const t = (el.textContent || "").trim().toLowerCase();
-            return t === "save" || t === "save map" || t.startsWith("saving");
-          }
-        );
-        if (saveBtn) {
-          (saveBtn as HTMLButtonElement).click();
-          // Give save a moment, then navigate
-          window.setTimeout(() => {
-            window.location.href = "/workspaces";
-          }, 900);
-          return;
-        }
+    function clickSaveIfPresent() {
+      const saveBtn = Array.from(document.querySelectorAll("button")).find((el) => {
+        const t = (el.textContent || "").trim().toLowerCase();
+        return t === "save" || t === "save map";
+      });
+      if (saveBtn && !(saveBtn as HTMLButtonElement).disabled) {
+        (saveBtn as HTMLButtonElement).click();
+        return true;
       }
-      window.location.href = "/workspaces";
+      return false;
     }
 
     function onLeaveClick() {
       const nodeCount = document.querySelectorAll(".react-flow__node").length;
+
       if (nodeCount > 0) {
         const save = window.confirm(
           "Save this workspace before leaving?\n\nOK = Save then leave\nCancel = Leave without saving"
         );
-        goToWorkspaces(save);
-        return;
-      }
-      window.location.href = "/workspaces";
-    }
 
-    function ensureButtons() {
-      if (!document.getElementById(btnId)) {
-        const header = document.querySelector("header");
-        if (header) {
-          const btn = document.createElement("button");
-          btn.id = btnId;
-          btn.type = "button";
-          btn.textContent = "Leave";
-          btn.setAttribute("aria-label", "Leave workspace");
-          btn.className =
-            "min-h-10 shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-white";
-          btn.addEventListener("click", onLeaveClick);
-
-          const desktopActions = header.querySelector(
-            ".hidden.items-center.gap-2.lg\\:flex, .hidden.lg\\:flex"
+        if (save) {
+          const clicked = clickSaveIfPresent();
+          window.setTimeout(
+            () => {
+              window.location.href = "/workspaces";
+            },
+            clicked ? 1000 : 0
           );
-          if (desktopActions) {
-            desktopActions.appendChild(btn);
-          } else {
-            // Place near the hamburger / end of the top row
-            const topRow = header.querySelector(":scope > div");
-            (topRow || header).appendChild(btn);
-          }
+          return;
         }
       }
 
-      // Mobile menu panel (when open)
+      window.location.href = "/workspaces";
+    }
+
+    function makeHeaderButton() {
+      const btn = document.createElement("button");
+      btn.id = btnId;
+      btn.type = "button";
+      btn.textContent = "Leave";
+      btn.setAttribute("aria-label", "Leave workspace");
+      btn.className =
+        "min-h-10 shrink-0 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-white";
+      btn.addEventListener("click", onLeaveClick);
+      return btn;
+    }
+
+    function makeMenuButton() {
+      const menuBtn = document.createElement("button");
+      menuBtn.id = menuId;
+      menuBtn.type = "button";
+      menuBtn.textContent = "Leave workspace";
+      menuBtn.className =
+        "flex w-full items-center justify-between rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-left text-sm font-medium text-white/90";
+      menuBtn.addEventListener("click", onLeaveClick);
+      return menuBtn;
+    }
+
+    function ensureButtons() {
+      const header = document.querySelector("header");
+      if (!header) return;
+
+      if (!document.getElementById(btnId)) {
+        const desktopActions =
+          header.querySelector(".hidden.lg\\:flex") ||
+          header.querySelector("[class*='lg:flex']");
+
+        if (desktopActions) {
+          desktopActions.appendChild(makeHeaderButton());
+        } else {
+          const topRow = header.querySelector(":scope > div");
+          (topRow || header).appendChild(makeHeaderButton());
+        }
+      }
+
       if (!document.getElementById(menuId)) {
-        const menuPanel = document.querySelector(
-          "header .border-t.border-white\\/10, header [class*='border-t']"
-        );
-        // Also try to find mobile drawer content
-        const candidates = Array.from(
-          document.querySelectorAll("header button, header div")
-        );
-        // Inject into mobile menu when "Log out" is visible in a full-width stack
         const logout = Array.from(document.querySelectorAll("button")).find(
           (el) => (el.textContent || "").trim() === "Log out"
         );
-        if (logout && logout.parentElement) {
-          const existing = document.getElementById(menuId);
-          if (!existing) {
-            const menuBtn = document.createElement("button");
-            menuBtn.id = menuId;
-            menuBtn.type = "button";
-            menuBtn.textContent = "Leave workspace";
-            menuBtn.className =
-              "flex w-full items-center justify-between rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-left text-sm font-medium text-white/90";
-            menuBtn.addEventListener("click", onLeaveClick);
-            logout.parentElement.insertBefore(menuBtn, logout);
-          }
+        // Only inject into mobile menu stack (full-width logout), not the desktop strip
+        if (
+          logout &&
+          logout.parentElement &&
+          logout.className.includes("w-full")
+        ) {
+          logout.parentElement.insertBefore(makeMenuButton(), logout);
         }
       }
     }
