@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import BillingSummary from "@/components/BillingSummary";
 
 export type DashboardHomeMap = {
@@ -26,27 +27,84 @@ export default function DashboardHome({
   onOpen,
   onLogout,
 }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <main className="flex min-h-dvh flex-col bg-background text-foreground">
-      <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-lab-surface/80 px-4 py-4 sm:px-6">
-        <div>
-          <p className="text-sm font-bold tracking-tight text-white">
-            MindLab<span className="text-lab-lime">AI</span>
-          </p>
-          <p className="mt-0.5 text-xs text-white/60">
-            {userEmail ? `Signed in as ${userEmail}` : "Your workspaces"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <BillingSummary />
+      <header className="border-b border-white/10 bg-lab-surface/80 px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold tracking-tight text-white">
+              MindLab<span className="text-lab-lime">AI</span>
+            </p>
+            <p className="mt-0.5 truncate text-xs text-white/60">
+              {userEmail ? `Signed in as ${userEmail}` : "Your workspaces"}
+            </p>
+          </div>
+
+          {/* Desktop actions */}
+          <div className="hidden items-center gap-2 sm:flex">
+            <BillingSummary />
+            <button
+              type="button"
+              onClick={onLogout}
+              className="rounded-lg border border-red-400/25 bg-red-500/15 px-3 py-2 text-xs font-medium text-red-200"
+            >
+              Log out
+            </button>
+          </div>
+
+          {/* Mobile hamburger */}
           <button
             type="button"
-            onClick={onLogout}
-            className="rounded-lg border border-red-400/25 bg-red-500/15 px-3 py-2 text-xs font-medium text-red-200"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex min-h-10 min-w-10 shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 sm:hidden"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
           >
-            Log out
+            <span
+              className={
+                menuOpen
+                  ? "block h-0.5 w-5 translate-y-2 rotate-45 bg-white transition"
+                  : "block h-0.5 w-5 bg-white transition"
+              }
+            />
+            <span
+              className={
+                menuOpen
+                  ? "block h-0.5 w-5 bg-white opacity-0 transition"
+                  : "block h-0.5 w-5 bg-white transition"
+              }
+            />
+            <span
+              className={
+                menuOpen
+                  ? "block h-0.5 w-5 -translate-y-2 -rotate-45 bg-white transition"
+                  : "block h-0.5 w-5 bg-white transition"
+              }
+            />
           </button>
         </div>
+
+        {menuOpen ? (
+          <div className="mt-3 flex flex-col gap-3 border-t border-white/10 pt-3 sm:hidden">
+            <div className="flex justify-stretch">
+              <div className="w-full [&_>div]:items-stretch [&_>div]:w-full [&_>div>div]:w-full [&_>div>div]:justify-between">
+                <BillingSummary />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                onLogout();
+              }}
+              className="min-h-11 w-full rounded-xl border border-red-400/25 bg-red-500/15 px-3 py-2.5 text-sm font-medium text-red-200"
+            >
+              Log out
+            </button>
+          </div>
+        ) : null}
       </header>
 
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-8 sm:px-6">
