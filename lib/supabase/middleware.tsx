@@ -38,7 +38,18 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  const isPublicAsset =
+    pathname === "/favicon.ico" ||
+    pathname === "/icon" ||
+    pathname === "/icon.svg" ||
+    pathname === "/apple-icon" ||
+    pathname === "/apple-icon.png" ||
+    pathname.startsWith("/opengraph-image") ||
+    pathname.startsWith("/twitter-image") ||
+    pathname.startsWith("/mindlab-mark");
+
   const isPublicRoute =
+    isPublicAsset ||
     pathname === "/" ||
     pathname === "/pricing" ||
     pathname === "/privacy" ||
@@ -50,6 +61,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/auth") ||
     pathname.startsWith("/invite") ||
     pathname === "/api/payments/webhook" ||
+    pathname === "/api/payments/paystack-webhook" ||
     pathname === "/api/auth/signup" ||
     pathname.startsWith("/api/invitations/");
 
