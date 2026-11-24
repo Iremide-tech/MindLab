@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import DashboardLeaveEnhancer from "@/components/DashboardLeaveEnhancer";
+import UiCopyGuard from "@/components/UiCopyGuard";
 
 export const metadata: Metadata = {
   title: "Research workspace",
@@ -19,6 +20,7 @@ export default function DashboardLayout({
   return (
     <>
       <DashboardLeaveEnhancer />
+      <UiCopyGuard />
       {children}
     </>
   );
