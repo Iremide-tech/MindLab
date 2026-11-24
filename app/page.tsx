@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import MindLabMark from "@/components/MindLabMark";
 import HeroMap from "./hero-map";
 import styles from "./landing.module.css";
 
@@ -49,7 +50,10 @@ export default function LandingPage() {
     <main className={styles.page}>
       <nav className={styles.nav} aria-label="Main navigation">
         <Link href="/" className={styles.wordmark}>
-          MINDLAB<span>_AI</span>
+          <MindLabMark className={styles.navMark} />
+          <span>
+            MINDLAB<span>_AI</span>
+          </span>
         </Link>
         <div className={styles.navLinks}>
           <Link href="/login">Log in</Link>
@@ -86,8 +90,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className={styles.heroMark} aria-hidden="true">
-            <span>ML</span>
-            <i />
+            <MindLabMark className={styles.heroMarkSvg} />
           </div>
         </div>
       </section>
@@ -166,7 +169,10 @@ export default function LandingPage() {
       </section>
 
       <footer className={styles.footer}>
-        <span>© {new Date().getFullYear()} MindLab AI</span>
+        <span className={styles.footerBrand}>
+          <MindLabMark className={styles.footerMark} />
+          © {new Date().getFullYear()} MindLab AI
+        </span>
         <span className={styles.footerLinks}>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>

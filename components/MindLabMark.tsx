@@ -1,0 +1,42 @@
+type Props = {
+  className?: string;
+  title?: string;
+};
+
+/** Geometric M mark — knowledge-map nodes in lab lime. */
+export default function MindLabMark({ className, title = "MindLab" }: Props) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 64 64"
+      fill="none"
+      className={className}
+      role="img"
+      aria-label={title}
+    >
+      <rect width="64" height="64" rx="14" fill="#090d0a" />
+      <g
+        stroke="#c8f169"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M14 50 V14 L32 36 L50 14 V50" />
+        <path d="M14 14 L23 26" />
+        <path d="M50 14 L41 26" />
+        <path d="M23 26 L32 36 L41 26" />
+        <path d="M14 50 L23 26" />
+        <path d="M50 50 L41 26" />
+      </g>
+      <g fill="#c8f169">
+        <circle cx="14" cy="50" r="3.2" />
+        <circle cx="14" cy="14" r="3.2" />
+        <circle cx="32" cy="36" r="3.2" />
+        <circle cx="50" cy="14" r="3.2" />
+        <circle cx="50" cy="50" r="3.2" />
+        <circle cx="23" cy="26" r="2.6" />
+        <circle cx="41" cy="26" r="2.6" />
+      </g>
+    </svg>
+  );
+}
