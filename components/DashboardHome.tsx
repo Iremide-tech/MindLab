@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import BillingSummary from "@/components/BillingSummary";
+import MindLabMark from "@/components/MindLabMark";
 
 export type DashboardHomeMap = {
   id: string;
@@ -33,16 +34,18 @@ export default function DashboardHome({
     <main className="flex min-h-dvh flex-col bg-background text-foreground">
       <header className="border-b border-white/10 bg-lab-surface/80 px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold tracking-tight text-white">
-              MindLab<span className="text-lab-lime">AI</span>
-            </p>
-            <p className="mt-0.5 truncate text-xs text-white/60">
-              {userEmail ? `Signed in as ${userEmail}` : "Your workspaces"}
-            </p>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <MindLabMark className="h-8 w-8 shrink-0 rounded-lg" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold tracking-tight text-white">
+                MindLab<span className="text-lab-lime">AI</span>
+              </p>
+              <p className="mt-0.5 truncate text-xs text-white/60">
+                {userEmail ? `Signed in as ${userEmail}` : "Your workspaces"}
+              </p>
+            </div>
           </div>
 
-          {/* Desktop actions */}
           <div className="hidden items-center gap-2 sm:flex">
             <BillingSummary />
             <button
@@ -54,7 +57,6 @@ export default function DashboardHome({
             </button>
           </div>
 
-          {/* Mobile hamburger */}
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
@@ -89,7 +91,7 @@ export default function DashboardHome({
         {menuOpen ? (
           <div className="mt-3 flex flex-col gap-3 border-t border-white/10 pt-3 sm:hidden">
             <div className="flex justify-stretch">
-              <div className="w-full [&_>div]:items-stretch [&_>div]:w-full [&_>div>div]:w-full [&_>div>div]:justify-between">
+              <div className="w-full [&_>div]:w-full [&_>div]:items-stretch [&_>div>div]:w-full [&_>div>div]:justify-between">
                 <BillingSummary />
               </div>
             </div>
