@@ -56,6 +56,8 @@ export default function LandingPage() {
           </span>
         </Link>
         <div className={styles.navLinks}>
+          <Link href="/about">About</Link>
+          <Link href="/pricing">Pricing</Link>
           <Link href="/login">Log in</Link>
           <Link href="/signup" className={styles.navCta}>
             Get started
@@ -174,9 +176,10 @@ export default function LandingPage() {
           © {new Date().getFullYear()} MindLab AI
         </span>
         <span className={styles.footerLinks}>
+          <Link href="/about">About</Link>
+          <Link href="/pricing">Pricing</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
-          <Link href="/pricing">Pricing</Link>
           <span>A product by Orion</span>
         </span>
       </footer>

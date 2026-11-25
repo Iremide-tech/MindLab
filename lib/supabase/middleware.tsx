@@ -51,6 +51,7 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     isPublicAsset ||
     pathname === "/" ||
+    pathname === "/about" ||
     pathname === "/pricing" ||
     pathname === "/privacy" ||
     pathname === "/terms" ||
