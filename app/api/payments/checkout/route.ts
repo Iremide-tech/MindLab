@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: existingPlan, error: customerLookupError } = await admin
       .from("user_plans")
-      .select("stripe_customer_id, plan_code, status, stripe_subscription_id")
+      .select("stripe_customer_id, plan_code, status")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -127,7 +127,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Customer IDs from Stripe test mode are invalid once you switch to live keys.
     let customerId =
       typeof existingPlan?.stripe_customer_id === "string"
         ? existingPlan.stripe_customer_id.trim()
@@ -149,14 +148,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // Only offer the Student trial if this account has never held a paid student/research sub.
-    const priorPaid =
-      existingPlan &&
-      (existingPlan.plan_code === "student" || existingPlan.plan_code === "research") &&
-      ["active", "trialing", "cancelled", "expired"].includes(String(existingPlan.status ?? "")) &&
-      Boolean(existingPlan.stripe_subscription_id);
+    // Student always gets a 7-day trial unless they already have an active/trialing paid plan.
+    const status = String(existingPlan?.status ?? "").toLowerCase();
+    const alreadyOnPaid =
+      (existingPlan?.plan_code === "student" || existingPlan?.plan_code === "research") &&
+      (status === "active" || status === "trialing");
 
-    const offerStudentTrial = requestedPlan === "student" && !priorPaid;
+    const offerStudentTrial = requestedPlan === "student" && !alreadyOnPaid;
 
     const metadata = { user_id: user.id, plan: requestedPlan };
     const session = await stripe.checkout.sessions.create({
@@ -171,9 +169,17 @@ export async function POST(request: Request) {
       metadata,
       subscription_data: {
         metadata,
-        ...(offerStudentTrial ? { trial_period_days: STUDENT_TRIAL_DAYS } : {}),
+        ...(offerStudentTrial
+          ? {
+              trial_period_days: STUDENT_TRIAL_DAYS,
+              trial_settings: {
+                end_behavior: {
+                  missing_payment_method: "cancel",
+                },
+              },
+            }
+          : {}),
       },
-      // Card is collected up front; charge starts after the trial ends.
       payment_method_collection: "always",
       ...(customerId ? { customer: customerId } : { customer_email: user.email }),
     });
