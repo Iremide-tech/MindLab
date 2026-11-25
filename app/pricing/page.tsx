@@ -7,18 +7,18 @@ import type { PlanCode } from "@/lib/paywall";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Compare MindLab plans. Start free and upgrade for deeper AI-powered learning, concept exploration, and research workflows.",
+    "Compare MindLab plans. Start free, try Student free for 7 days, or upgrade for deeper AI-powered learning and research.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "MindLab AI Pricing",
     description:
-      "Compare plans for AI-powered learning, concept mapping, and research.",
+      "Compare plans for AI-powered learning, concept mapping, and research. Student includes a 7-day free trial.",
     url: "/pricing",
   },
   twitter: {
     card: "summary",
     title: "MindLab AI Pricing",
-    description: "Find the right MindLab plan for your research workflow.",
+    description: "Find the right MindLab plan. Student plan includes a 7-day free trial.",
   },
 };
 
@@ -28,24 +28,41 @@ const plans = [
     name: "Free",
     price: "$0",
     description: "Try MindLab with a small daily allowance for each learning tool.",
-    features: ["2 mind maps per day", "2 quizzes, 2 explanations, and 2 examples per day", "Basic research maps"],
+    features: [
+      "2 mind maps per day",
+      "2 quizzes, 2 explanations, and 2 examples per day",
+      "Basic research maps",
+    ],
     highlighted: false,
+    badge: null as string | null,
   },
   {
     code: "student",
     name: "Student",
     price: "$12/mo",
-    description: "A generous daily allowance for coursework and regular study.",
-    features: ["25 mind maps per day", "25 quizzes, 25 explanations, and 25 examples per day", "Concept expansion & priority workflow"],
+    description:
+      "A generous daily allowance for coursework and regular study. Start with 7 days free—card required, cancel anytime before the trial ends.",
+    features: [
+      "7-day free trial",
+      "25 mind maps per day",
+      "25 quizzes, 25 explanations, and 25 examples per day",
+      "Note import & concept expansion",
+    ],
     highlighted: true,
+    badge: "7-day free trial",
   },
   {
     code: "research",
     name: "Research",
     price: "$29/mo",
     description: "For intensive research with virtually unrestricted access to learning tools.",
-    features: ["Unlimited mind maps, quizzes, explanations, and examples", "Advanced concept exploration", "Best for long-running studies"],
+    features: [
+      "Unlimited mind maps, quizzes, explanations, and examples",
+      "Advanced concept exploration",
+      "Best for long-running studies",
+    ],
     highlighted: false,
+    badge: null as string | null,
   },
 ];
 
@@ -67,11 +84,10 @@ export default async function PricingPage({
             Upgrade when you are ready
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-white/55">
-            Start free, then move to a plan that supports deeper learning and faster research.
+            Start free, try Student with a 7-day free trial, or move to Research for
+            intensive work.
           </p>
-          {checkout === "processing" ? (
-            <CheckoutConfirmation />
-          ) : null}
+          {checkout === "processing" ? <CheckoutConfirmation /> : null}
         </div>
 
         <div className="grid gap-5 md:grid-cols-3">
@@ -85,11 +101,15 @@ export default async function PricingPage({
                   : "border-white/10 bg-lab-surface/85",
               ].join(" ")}
             >
-              <div className="mb-6 flex items-center justify-between">
+              <div className="mb-6 flex items-center justify-between gap-2">
                 <div>
                   <p className="text-lg font-semibold text-foreground">{plan.name}</p>
                 </div>
-                {plan.highlighted ? (
+                {plan.badge ? (
+                  <span className="rounded-md bg-lab-lime px-2 py-1 text-xs font-semibold text-lab-ink">
+                    {plan.badge}
+                  </span>
+                ) : plan.highlighted ? (
                   <span className="rounded-md bg-lab-lime px-2 py-1 text-xs font-semibold text-lab-ink">
                     Popular
                   </span>
@@ -98,6 +118,9 @@ export default async function PricingPage({
 
               <div className="mb-6">
                 <span className="text-4xl font-semibold text-foreground">{plan.price}</span>
+                {plan.code === "student" ? (
+                  <p className="mt-2 text-xs text-lab-lime">Then $12/mo after trial</p>
+                ) : null}
               </div>
 
               <p className="mb-6 min-h-16 text-sm leading-6 text-white/55">{plan.description}</p>
@@ -120,9 +143,10 @@ export default async function PricingPage({
         </div>
 
         <p className="mt-10 text-center text-xs text-white/40">
-          Subscriptions renew monthly until cancelled. Paid users can cancel anytime
-          from the dashboard via <span className="text-white/60">Manage / Cancel</span>.
-          See our{" "}
+          Student free trial lasts 7 days. You will not be charged until the trial
+          ends; cancel anytime from the dashboard via{" "}
+          <span className="text-white/60">Manage / Cancel</span>. Subscriptions renew
+          monthly until cancelled. See our{" "}
           <Link href="/terms" className="text-lab-lime hover:underline">
             Terms
           </Link>{" "}

@@ -11,6 +11,8 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+const STUDENT_TRIAL_DAYS = 7;
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -110,7 +112,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: existingPlan, error: customerLookupError } = await admin
       .from("user_plans")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id, plan_code, status, stripe_subscription_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -147,6 +149,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Only offer the Student trial if this account has never held a paid student/research sub.
+    const priorPaid =
+      existingPlan &&
+      (existingPlan.plan_code === "student" || existingPlan.plan_code === "research") &&
+      ["active", "trialing", "cancelled", "expired"].includes(String(existingPlan.status ?? "")) &&
+      Boolean(existingPlan.stripe_subscription_id);
+
+    const offerStudentTrial = requestedPlan === "student" && !priorPaid;
+
     const metadata = { user_id: user.id, plan: requestedPlan };
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -158,7 +169,12 @@ export async function POST(request: Request) {
       cancel_url: new URL("/pricing?checkout=cancelled", siteOrigin).toString(),
       client_reference_id: user.id,
       metadata,
-      subscription_data: { metadata },
+      subscription_data: {
+        metadata,
+        ...(offerStudentTrial ? { trial_period_days: STUDENT_TRIAL_DAYS } : {}),
+      },
+      // Card is collected up front; charge starts after the trial ends.
+      payment_method_collection: "always",
       ...(customerId ? { customer: customerId } : { customer_email: user.email }),
     });
 
@@ -173,6 +189,7 @@ export async function POST(request: Request) {
       success: true,
       checkoutUrl: session.url,
       plan: requestedPlan,
+      trialDays: offerStudentTrial ? STUDENT_TRIAL_DAYS : 0,
     });
   } catch (error) {
     console.error("Checkout route failed:", error);

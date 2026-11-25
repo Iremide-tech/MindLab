@@ -73,13 +73,15 @@ export default function BillingSummary() {
     billing.planName === "Student" || billing.planName === "Research";
 
   const usageLabel =
-    billing.status === "cancelled"
-      ? "Cancels at period end"
-      : billing.dailyLimit === null
-        ? "Unlimited generations"
-        : billing.usageCount === null
-          ? `${billing.dailyLimit} generations/day`
-          : `${Math.max(0, billing.dailyLimit - billing.usageCount)} of ${billing.dailyLimit} left today`;
+    billing.status === "trialing"
+      ? "Free trial active"
+      : billing.status === "cancelled"
+        ? "Cancels at period end"
+        : billing.dailyLimit === null
+          ? "Unlimited generations"
+          : billing.usageCount === null
+            ? `${billing.dailyLimit} generations/day`
+            : `${Math.max(0, billing.dailyLimit - billing.usageCount)} of ${billing.dailyLimit} left today`;
 
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
@@ -93,6 +95,7 @@ export default function BillingSummary() {
         <div className="min-w-0">
           <p className="truncate text-[11px] font-semibold text-white sm:text-xs">
             {billing.planName} plan
+            {billing.status === "trialing" ? " · Trial" : ""}
           </p>
           <p className="hidden text-[10px] text-white/45 sm:block">{usageLabel}</p>
         </div>

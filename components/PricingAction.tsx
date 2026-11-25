@@ -57,6 +57,9 @@ export default function PricingAction({
     billing?.planCode === planCode &&
     (planCode === "free" || usablePaidStatuses.has(billing.status));
 
+  const isTrialing =
+    isCurrentPlan && planCode !== "free" && billing?.status === "trialing";
+
   async function startCheckout() {
     setLoading(true);
     setError(null);
@@ -108,14 +111,19 @@ export default function PricingAction({
       <button
         type="button"
         disabled
-        aria-label={`${planCode} plan is active`}
+        aria-label={isTrialing ? `${planCode} trial is active` : `${planCode} plan is active`}
         className="inline-flex w-full cursor-default items-center justify-center gap-2 rounded-lg border border-lab-lime/40 bg-lab-lime/10 px-4 py-3 text-sm font-semibold text-lab-lime"
       >
         <span aria-hidden="true">✓</span>
-        Active
+        {isTrialing ? "Trial active" : "Active"}
       </button>
     );
   }
+
+  const cta =
+    planCode === "student"
+      ? "Start 7-day free trial"
+      : "Choose plan";
 
   return (
     <div>
@@ -134,7 +142,7 @@ export default function PricingAction({
           ? "Opening Stripe Checkout..."
           : !statusChecked
             ? "Checking plan..."
-            : "Choose plan"}
+            : cta}
       </button>
       {error ? (
         <p role="alert" className="mt-3 text-sm text-rose-300">
