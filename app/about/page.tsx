@@ -6,12 +6,12 @@ import styles from "../landing.module.css";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "MindLab is an AI-powered visual workspace for learning and research—built so every idea has somewhere to lead.",
+    "MindLab is an AI-powered visual workspace for learning and research—the first product from Orion Cybernetics, founded by Iremide Awobodu.",
   alternates: { canonical: "/about" },
   openGraph: {
     title: "About MindLab AI",
     description:
-      "A product by Orion Cybernetics. Visual maps for students and researchers.",
+      "Built by Orion Cybernetics. Founded by Iremide Awobodu. Mapping how Africa learns—and where intelligence goes next.",
     url: "/about",
   },
 };
@@ -126,22 +126,67 @@ export default function AboutPage() {
         </article>
       </section>
 
+      <section className={styles.quotes} aria-labelledby="founder-heading">
+        <div className={styles.sectionBar}>
+          <h2 id="founder-heading">Founder</h2>
+          <p>Who is building this.</p>
+        </div>
+        <div className={styles.quoteGrid} style={{ gridTemplateColumns: "1fr" }}>
+          <blockquote className={styles.quoteCard} style={{ minHeight: 0 }}>
+            <p className={styles.quoteText} style={{ fontSize: "clamp(18px, 2vw, 22px)" }}>
+              Iremide Awobodu
+            </p>
+            <p style={{ margin: "12px 0 0", color: "#bcc2b7", fontSize: 14, lineHeight: 1.65 }}>
+              Founder of Orion Cybernetics and MindLab AI. Building tools that make
+              thinking visible—and a company that aims to put Nigerian and African
+              talent at the frontier of artificial intelligence.
+            </p>
+            <footer className={styles.quoteAuthor} style={{ marginTop: 20 }}>
+              <a
+                href="mailto:iresamuel226@gmail.com"
+                style={{ color: "inherit", textDecoration: "none" }}
+              >
+                iresamuel226@gmail.com
+              </a>
+            </footer>
+          </blockquote>
+        </div>
+      </section>
+
       <section className={styles.closing}>
-        <p className={styles.eyebrow}>A product by Orion Cybernetics</p>
+        <p className={styles.eyebrow}>The long game</p>
         <h2>
-          BUILT IN
+          ORION
           <br />
-          THE OPEN.
+          CYBERNETICS.
         </h2>
-        <p className={styles.intro} style={{ marginBottom: 32, maxWidth: 520 }}>
-          MindLab is the first product under Orion Cybernetics—an independent effort
-          to build practical AI tools for learning and research. We ship carefully,
-          listen to early users, and keep the core idea simple: every idea deserves
-          a place on the map.
+        <p className={styles.intro} style={{ marginBottom: 20, maxWidth: 560 }}>
+          MindLab is chapter one. Orion Cybernetics is the company behind it—and the
+          ambition is larger than a single product.
         </p>
-        <Link href="/signup" className={styles.primaryAction}>
-          Start free
-        </Link>
+        <p className={styles.intro} style={{ marginBottom: 20, maxWidth: 560 }}>
+          We are building toward becoming Nigeria&apos;s first serious AGI research
+          company: a lab that ships useful systems today while training the depth,
+          data, and people required for frontier intelligence tomorrow. Not a copy of
+          Silicon Valley. A stack grown here—for African problems, African researchers,
+          and a global standard of excellence.
+        </p>
+        <p className={styles.intro} style={{ marginBottom: 32, maxWidth: 560 }}>
+          The goal is simple to say and hard to earn: the most exciting technology
+          company on the continent. MindLab is how we start—by teaching machines to
+          help humans map what they know. What follows is everything that unlocks.
+        </p>
+        <div className={styles.actions} style={{ marginTop: 0 }}>
+          <Link href="/signup" className={styles.primaryAction}>
+            Start free
+          </Link>
+          <a
+            href="mailto:iresamuel226@gmail.com"
+            className={styles.textAction}
+          >
+            Contact founder
+          </a>
+        </div>
       </section>
 
       <footer className={styles.footer}>
