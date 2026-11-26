@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const updated = "November 17, 2026";
+const updated = "November 27, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -54,8 +54,8 @@ export default function PrivacyPage() {
             <ul className="list-disc space-y-2 pl-5">
               <li>
                 <strong className="text-white/90">Account data</strong> — email
-                address and authentication details when you sign up or sign in
-                (including Google sign-in when you choose it).
+                address and authentication details when you sign up or sign in with
+                email and password.
               </li>
               <li>
                 <strong className="text-white/90">Workspace content</strong> —
@@ -101,9 +101,8 @@ export default function PrivacyPage() {
                 authentication, database, and application backend.
               </li>
               <li>
-                <strong className="text-white/90">Google (Gemini / Generative AI)</strong>{" "}
-                — AI features such as map generation, explanations, expansion, and
-                quizzes.
+                <strong className="text-white/90">AI provider</strong> — map
+                generation, explanations, expansion, and quizzes.
               </li>
               <li>
                 <strong className="text-white/90">Stripe</strong> — subscription

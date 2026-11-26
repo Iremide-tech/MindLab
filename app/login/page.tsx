@@ -38,23 +38,25 @@ function LoginForm() {
   const [callbackErrorDismissed, setCallbackErrorDismissed] = useState(false);
   const callbackError = searchParams.get("error");
   const callbackErrorMessage =
-    callbackError === "gmail_account_exists"
+    callbackError === "account_exists"
       ? "An account already exists for this email. Sign in instead."
-      : callbackError === "google_signin_failed"
-        ? "Google sign-in failed. Try again, or use email and password."
-        : null;
+      : callbackError === "auth_failed" || callbackError === "google_signin_failed"
+        ? "Sign-in failed. Use your email and password, or reset your password."
+        : callbackError === "gmail_account_exists"
+          ? "An account already exists for this email. Sign in instead."
+          : null;
   const visibleError = error ?? (callbackErrorDismissed ? null : callbackErrorMessage);
 
   useEffect(() => {
-    const { data: { subscription } } = getSupabase().auth.onAuthStateChange(
-      (event) => {
-        if (event === "PASSWORD_RECOVERY") {
-          setRecoveringPassword(true);
-          setMessage("Choose a new password to finish resetting your account.");
-          setError(null);
-        }
+    const {
+      data: { subscription },
+    } = getSupabase().auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveringPassword(true);
+        setMessage("Choose a new password to finish resetting your account.");
+        setError(null);
       }
-    );
+    });
 
     return () => {
       subscription.unsubscribe();
@@ -153,12 +155,10 @@ function LoginForm() {
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-lab-surface/90 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
         <div className="mb-8 text-center">
           <Link href="/" className="inline-block">
-          <h1 className="text-3xl font-bold tracking-[-0.03em]">MindLab</h1>
+            <h1 className="text-3xl font-bold tracking-[-0.03em]">MindLab</h1>
           </Link>
 
-          <p className="mt-2 text-sm text-white/50">
-            Enter your research workspace
-          </p>
+          <p className="mt-2 text-sm text-white/50">Enter your research workspace</p>
         </div>
 
         {recoveringPassword ? (
@@ -238,15 +238,11 @@ function LoginForm() {
         )}
 
         {visibleError && (
-          <p className="mt-4 text-center text-sm text-red-400">
-            {visibleError}
-          </p>
+          <p className="mt-4 text-center text-sm text-red-400">{visibleError}</p>
         )}
 
         {message && (
-          <p className="mt-4 text-center text-sm text-green-400">
-            {message}
-          </p>
+          <p className="mt-4 text-center text-sm text-green-400">{message}</p>
         )}
 
         <p className="mt-6 text-center text-sm text-white/50">
